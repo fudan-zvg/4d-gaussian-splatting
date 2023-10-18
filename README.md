@@ -15,15 +15,15 @@
 
 ### 🎞️ Dynamic novel view synthesis
 
-https://github.com/fudan-zvg/4D-Gaussian-Splatting/assets/45744267/68b99883-1286-43ad-8b30-7854eae899e9
+https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/5e163b88-4f70-4157-b9f5-8431b13c26b7
 
 ### 🎞️ Bullet time
 
-https://github.com/fudan-zvg/4D-Gaussian-Splatting/assets/45744267/d1d22772-b005-462f-a87b-0e0ce1f3c6d9
+https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/ac5bc3b2-dd17-446d-9ee6-6efcc871eb84
 
 ### 🎞️ Free view synthesis from a teleporting camera
 
-https://github.com/fudan-zvg/4D-Gaussian-Splatting/assets/45744267/61db4a23-de17-4786-b3da-77ea894a9fe5
+https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/6bd0b57b-4857-4722-9851-61250a2521ab
 
 
 ## 📜 Reference
