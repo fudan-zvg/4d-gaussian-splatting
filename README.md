@@ -25,6 +25,11 @@ https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/ac5bc3b2-dd17
 
 https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/6bd0b57b-4857-4722-9851-61250a2521ab
 
+### 🎞️ Monocular dynamic scene reconstruction
+
+https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/2c79974c-1867-4ce6-848b-5d31679b6067
+
+
 
 ## 📜 Reference
 ```bibtex
