@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="description" content="4D Gaussian Splatting">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>4D Gaussian Splatting</title>
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+
+  <link rel="stylesheet" href="./static/css/bulma.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="./static/css/index.css">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="./static/js/fontawesome.all.min.js"></script>
+  <script src="./static/js/bulma-carousel.min.js"></script>
+  <script src="./static/js/bulma-slider.min.js"></script>
+  <script src="./static/js/index.js"></script>
+  <script src="./static/js/video_comparison.js"></script>
+
+</head>
+
+<body>
+
+  <section class="hero">
+    <div class="hero-body">
+      <div class="container is-max-desktop">
+        <div class="columns is-centered">
+          <div class="column has-text-centered">
+            <h3 class="title is-2 publication-title">
+              <!-- <span class="dnerf">Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting</span> -->
+              Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting    
+            </h3>
+                  <div class="is-size-5 publication-authors">
+                    <span class="author-block">
+                      Zeyu Yang<sup>1</sup>,</span>
+                    <span class="author-block">
+                      Hongye Yang<sup>1</sup>,</span>
+                    <span class="author-block">
+                      Zijie Pan<sup>1</sup>,
+                    </span>
+                    <span class="author-block">
+                      <a href="https://surrey-uplab.github.io/">Xiatian Zhu</a><sup>2</sup>,
+                    </span>
+                    <span class="author-block">
+                      <a href="https://lzrobots.github.io/">Li Zhang</a><sup>1<a href="mailto:lizhangfd@fudan.edu.cn"><i class="fa fa-envelope"></i></a></sup>,
+                    </span>
+                  </div>
+
+                <div class="is-size-5 publication-authors">
+                  <span class="author-block"><sup>1</sup>Fudan University, </span>
+                  <span class="author-block"><sup>2</sup>University of Surrey</span>
+                </div>
+
+              <div class="column has-text-centered">
+                <div class="publication-links">
+                  <!-- PDF Link. -->
+                  <span class="link-block">
+                    <a href="https://arxiv.org/pdf/2310.10642.pdf"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon">
+                        <i class="fas fa-file-pdf"></i>
+                      </span>
+                      <span>Paper</span>
+                    </a>
+                  </span>
+                  <span class="link-block">
+                    <a href="https://arxiv.org/abs/2310.10642"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon">
+                        <i class="ai ai-arxiv"></i>
+                      </span>
+                      <span>arXiv</span>
+                    </a>
+                  </span>
+
+
+                  <!-- Code Link. -->
+                  <span class="link-block">
+                    <a href="https://github.com/fudan-zvg/4d-gaussian-splatting"
+                      class="external-link button is-normal is-rounded is-dark">
+                      <span class="icon">
+                        <i class="fab fa-github"></i>
+                      </span>
+                      <span>Code</span>
+                    </a>
+                  </span>
+                </div>
+
+              </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="hero teaser", style="width: 75%; margin: 0 auto;">
+    <!-- <hr style="width:100%;height:0.7px;background-color:rgba(0, 0, 0, 0.665);margin-top:1em"> -->
+    <h2 class="content has-text-centered", style="width: 75%; margin: 0 auto;">
+      <span class="dnerf">4D Gaussian Splatting</span> achieves real-time high-fidelity video synthesis by 
+      optimizing a collection of 4D primitives to fit the underlying spatio-temporal 4D volume of dynamic scenes.
+    </h2>
+    <div class="columns is-8", style="width: 75%; margin: 0 auto;">
+        <div class="column">
+          <div class="content has-text-centered">
+            <video id="teaser_free"
+                   controls
+                   loop
+                   autoplay
+                   muted
+                   style="height: 220px">
+              <source src="./static/videos/free_view.mp4"
+                      type="video/mp4">
+            </video>
+            <p>(a) Indoor scene with intricate dynamics and illuminations</p>
+          </div>
+        </div>
+        <div class="column">
+          <div class="content has-text-centered">
+            <video id="teaser_mono"
+                   controls
+                   loop
+                   autoplay
+                   muted
+                   style="height: 220px">
+              <source src="./static/videos/monocular.mp4"
+                      type="video/mp4">
+            </video>
+            <p>(b) Novel view synthesis from monocular dynamic videos</p>
+          </div>
+        </div>
+        <div class="column">
+          <div class="content has-text-centered">
+            <video id="teaser_urban"
+                   controls
+                   loop
+                   autoplay
+                   muted
+                   style="height: 220px">
+              <source src="./static/videos/0100160_FRONT.mp4"
+                      type="video/mp4">
+            </video>
+            <p>(c) Reconstruction on the Urban scene</p>
+          </div>
+        </div>
+      </div>
+      <!-- Add other video blocks as needed -->
+  </section>
+
+  <section class="section">
+    <div class="container is-max-desktop">
+      <!-- Abstract. -->
+      <div class="columns is-centered has-text-centered">
+        <div class="column is-four-fifths">
+          <h2 class="title is-3">Abstract</h2>
+          <div class="content has-text-justified">
+          Reconstructing dynamic 3D scenes from 2D images and generating diverse views over time is challenging due to 
+          scene complexity and temporal dynamics. Despite advancements in neural implicit models, limitations persist: 
+          (i) Inadequate Scene Structure: Existing methods struggle to reveal the spatial and temporal structure of dynamic scenes 
+          from directly learning the complex 6D plenoptic function. (ii) Scaling Deformation Modeling: 
+          Explicitly modeling scene element deformation becomes impractical for complex dynamics. To address these issues, 
+          we consider the spacetime as an entirety and propose to approximate the underlying spatio-temporal 4D volume of a dynamic scene 
+          by optimizing a collection of 4D primitives, with explicit geometry and appearance modeling. 
+          Learning to optimize the 4D primitives enables us to synthesize novel views at any desired time with our tailored rendering routine. 
+          Our model is conceptually simple, consisting of a 4D Gaussian parameterized by anisotropic ellipses that 
+          can rotate arbitrarily in space and time, as well as view-dependent and time-evolved appearance represented by the 
+          coefficient of 4D spherindrical harmonics. This approach offers simplicity, flexibility for variable-length video and 
+          end-to-end training, and efficient real-time rendering, making it suitable for capturing complex dynamic scene motions. 
+          Experiments across various benchmarks, including monocular and multi-view scenarios, 
+          demonstrate our 4DGS model's superior visual quality and efficiency.
+          </div>
+        </div>
+      </div>
+      <!--/ Abstract. -->
+
+      <br>
+
+      <!-- Architecture -->
+      <div class="columns is-centered has-text-centered">
+        <div class="column is-full-width">
+          <h2 class="title is-3">Method</h2>
+
+          <div class="content has-text-centered">
+            <p>
+              <strong>Schematic illustration:</strong> 4D Gaussian Splatting achieves real-time high-fidelity video synthesis by 
+              optimizing a collection of 4D primitives to fit the underlying spatiotemporal 4D volume of dynamic scenes. 
+              The rendering process of 4D Gaussian Splatting has conceptual parallels with the imaging process of a dynamic scenes.
+            </p>
+          </div>
+
+          <img src="static/images/teaser.png" alt="Image description" style="width: 80%; height: auto;">
+
+          <br>
+          <br>
+
+          <div class="content has-text-centered">
+            <p>
+              <strong>Rendering pipeline:</strong> Given a time t and view I 
+              each 4D Gaussian is first decomposed into a conditional 3D Gaussian and a marginal 1D Gaussian. 
+              Subsequently, the conditional 3D Gaussian is projected to a 2D splat. Finally, we integrate the planar conditional Gaussian, 
+              1D marginal Gaussian, and time-evolving view-dependent color to render the view I.
+            </p>
+          </div>
+
+          <img src="static/images/pipeline.png" alt="Image description" style="width: 80%; height: auto;">
+
+        </div>
+      </div>
+
+      <br>
+
+      <div class="columns is-centered has-text-centered">
+        <div class="column is-full-width">
+          <h2 class="title is-3">Qualitative novel-view synthesis results</h2>
+          <div class="content has-text-centered">
+            <p>
+              <span class="dnerf">4D Gaussian Splatting</span> outperforms previous arts in both visual quality and efficiency.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="columns is-centered">
+        <!-- Visual Effects. -->
+        <div class="column">
+          <div class="content has-text-centered">
+            <img src="static/images/sota_comp.png" alt="Image description" style="width: 100%; height: auto;">
+            <video id="replay-video"
+              controls
+              autoplay
+              loop
+              muted
+              width="100%">
+              <source src="./static/videos/compact_qualitative.mp4"
+                      type="video/mp4">
+            </video>
+            <video id="replay-video"
+              controls
+              autoplay
+              loop
+              muted
+              width="100%">
+              <source src="./static/videos/free_view.mp4"
+                      type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+
+      <br>
+
+      <!-- Qualitative Scene Decomposition -->
+      <div class="columns is-centered has-text-centered">
+        <div class="column is-full-width">
+          <h2 class="title is-3">Temporal feature</h2>
+          <div class="content has-text-centered">
+            <p>
+              (a) <span class="dnerf">4D Gaussian Splatting</span> can capture the coarse dynamic of scene by only optimizing the rendering loss.
+            </p>
+            <img src="static/images/flow.png" alt="Image description" style="width: 100%; height: auto;">
+            
+            <br>
+
+            <p>
+              (b) The statics in time dimension naturally form a mask to delineate dynamic and static regions.
+            </p>
+            <img src="./static/images/time.png" alt="time" style="width: 100%; height: auto;">
+            
+            <br>
+
+            <p>
+              (c) <span class="dnerf">4D Gaussian Splatting</span> allows seamless transition between each frame, thus can naturally simulate and 
+              bullet-time effects.
+            </p>
+            <video id="replay-video"
+                  controls
+                  autoplay
+                  loop
+                  muted
+                  width="100%">
+              <source src="./static/videos/bullet_time.mp4"
+                      type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+      
+      <br>
+
+      <div class="columns is-centered has-text-centered">
+        <div class="column is-full-width">
+          <h2 class="title is-3">Reconstruction for urban scenes</h2>
+          <div class="content has-text-centered">
+            <p>
+              <span class="dnerf">4D Gaussian Splatting</span> can be easily applied in the large-scale urban scenes.
+            </p>
+            
+            <div class="video-compare-container">
+              <video class="video" id="mesh1" loop autoplay muted src="static/videos/concat_with_depth_horizontal.mp4"
+                onplay="resizeAndPlay(this)"></video>
+              <canvas height="0" class="videoMerge" id="mesh1Merge"></canvas>
+            </div>
+            
+            <video id="replay-video"
+                controls
+                autoplay
+                loop
+                muted
+                width="100%">
+            <source src="./static/videos/0100160_FRONT_with_depth_seg_new.mp4"
+                    type="video/mp4">
+            </video>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="BibTeX">
+    <div class="container is-max-desktop content">
+      <h2 class="title">BibTeX</h2>
+      <p>
+        If you find our paper or code useful, please consider citing:
+      </p>
+      <pre><code>@article{yang2023gs4d,
+        title     = {Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting},
+        author    = {Yang, Zeyu and Yang, Hongye and Pan, Zijie and Zhu, Xiatian and Zhang, Li},
+        journal   = {arXiv preprint arXiv 2310.10642},
+        year      = {2023},
+      }</code></pre>
+    </div>
+  </section>
+
+
+  <footer class="footer">
+    <div class="container">
+      <div class="content has-text-centered">
+        <a class="icon-link" href="https://arxiv.org/pdf/2310.10642.pdf">
+          <i class="fas fa-file-pdf"></i>
+        </a>
+        <a class="icon-link" href="https://github.com/fudan-zvg/4d-gaussian-splatting" class="external-link" disabled>
+          <i class="fab fa-github"></i>
+        </a>
+      </div>
+      <div class="columns is-centered">
+        <div class="column is-8">
+          <div class="content has-text-centered">
+            <p>
+              We borrow the page template from <a href="https://github.com/nerfies/nerfies.github.io"> Nerfies</a>. The video comparison script is modified based on <a href="https://zubair-irshad.github.io/projects/neo360.html"> NeO 360</a>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+</body>
+
+</html>
