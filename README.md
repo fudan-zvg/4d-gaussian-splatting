@@ -68,7 +68,7 @@ https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/6bd0b57b-4857
 https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/2c79974c-1867-4ce6-848b-5d31679b6067
 
 
-## 📜 Reference
+## 📜 BibTex
 ```bibtex
 @inproceedings{yang2023gs4d,
   title={Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting},
