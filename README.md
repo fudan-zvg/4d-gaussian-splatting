@@ -51,6 +51,10 @@ python train.py --config $config_path
 
 ## 🎥 Videos
 
+### 🎞️ Demo
+
+[![Demo Video](https://i3.ytimg.com/vi/yOEZtyn02Ss/maxresdefault.jpg)](https://www.youtube.com/embed/yOEZtyn02Ss)
+
 ### 🎞️ Dynamic novel view synthesis
 
 https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/5e163b88-4f70-4157-b9f5-8431b13c26b7
