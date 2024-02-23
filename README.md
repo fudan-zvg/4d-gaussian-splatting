@@ -2,8 +2,9 @@
 ### [Project page](https://fudan-zvg.github.io/4d-gaussian-splatting/) | [Paper](https://arxiv.org/abs/2310.10642)
 > [**Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting**](https://arxiv.org/abs/2310.10642),            
 > Zeyu Yang, Hongye Yang, Zijie Pan, [Li Zhang](https://lzrobots.github.io)
-> **Fudan University**
+> **Fudan University**  
 > **ICLR 2024**
+
 
 **This repository is the official implementation of "Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting".** In this paper, we propose coherent integrated modeling of the space and time dimensions for dynamic scenes by formulating unbiased 4D Gaussian primitives along with a dedicated rendering pipeline.
 
