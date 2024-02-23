@@ -1,7 +1,7 @@
 # Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting
 ### [Project page](https://fudan-zvg.github.io/4d-gaussian-splatting/) | [Paper](https://arxiv.org/abs/2310.10642)
 > [**Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting**](https://arxiv.org/abs/2310.10642),            
-> Zeyu Yang, Hongye Yang, Zijie Pan, [Xiatian Zhu](https://surrey-uplab.github.io/), [Li Zhang](https://lzrobots.github.io)  
+> Zeyu Yang, Hongye Yang, Zijie Pan, [Li Zhang](https://lzrobots.github.io)  
 > **ICLR 2024**
 
 **This repository is the official implementation of "Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting".** In this paper, we propose coherent integrated modeling of the space and time dimensions for dynamic scenes by formulating unbiased 4D Gaussian primitives along with a dedicated rendering pipeline.
@@ -53,7 +53,7 @@ python train.py --config $config_path
 
 ### 🎞️ Demo
 
-[![Demo Video](https://i3.ytimg.com/vi/yOEZtyn02Ss/maxresdefault.jpg)](https://www.youtube.com/embed/yOEZtyn02Ss)
+[![Demo Video](https://i3.ytimg.com/vi/3cXC9e4CujM/maxresdefault.jpg)](https://www.youtube.com/embed/3cXC9e4CujM)
 
 ### 🎞️ Dynamic novel view synthesis
 
@@ -76,7 +76,7 @@ https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/2c79974c-1867
 ```bibtex
 @inproceedings{yang2023gs4d,
   title={Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting},
-  author={Yang, Zeyu and Yang, Hongye and Pan, Zijie and Zhu, Xiatian and Zhang, Li},
+  author={Yang, Zeyu and Yang, Hongye and Pan, Zijie and Zhang, Li},
   booktitle = {International Conference on Learning Representations (ICLR)},
   year={2024}
 }
