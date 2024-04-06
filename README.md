@@ -32,7 +32,7 @@ conda activate 4dgs
 
 **DyNeRF dataset:**
 
-Download the [Neural 3D Video dataset](https://fudan-zvg.github.io/4d-gaussian-splatting/) and extract each scene to `data/N3V`. After that, preprocess the raw video by executing:
+Download the [Neural 3D Video dataset](https://github.com/facebookresearch/Neural_3D_Video) and extract each scene to `data/N3V`. After that, preprocess the raw video by executing:
 
 ```shell
 python scripts/n3v2blender.py data/N3V/$scene_name
