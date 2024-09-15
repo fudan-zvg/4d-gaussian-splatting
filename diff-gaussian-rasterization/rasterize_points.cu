@@ -33,7 +33,7 @@ std::function<char*(size_t N)> resizeFunctional(torch::Tensor& t) {
     return lambda;
 }
 
-std::tuple<int, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+std::tuple<int, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 RasterizeGaussiansCUDA(
 	const torch::Tensor& background,
 	const torch::Tensor& means3D,
@@ -81,6 +81,7 @@ RasterizeGaussiansCUDA(
   torch::Tensor out_depth = torch::full({1, H, W}, 0.0, float_opts);
   torch::Tensor out_T = torch::full({1, H, W}, 0.0, float_opts);
   torch::Tensor radii = torch::full({P}, 0, means3D.options().dtype(torch::kInt32));
+  torch::Tensor out_means3D = means3D.clone();
   
   torch::Device device(torch::kCUDA);
   torch::TensorOptions options(torch::kByte);
@@ -108,6 +109,7 @@ RasterizeGaussiansCUDA(
 		background.contiguous().data<float>(),
 		W, H,
 		means3D.contiguous().data<float>(),
+		out_means3D.contiguous().data<float>(),
 		sh.contiguous().data_ptr<float>(),
 		colors.contiguous().data<float>(), 
 		flows.contiguous().data<float>(),
@@ -141,13 +143,14 @@ RasterizeGaussiansCUDA(
   CudaRasterizer::GeometryState geoState = CudaRasterizer::GeometryState::fromChunk(geo_ptr, P);
 
   torch::Tensor covs3D_com = torch::from_blob(geoState.cov3D, {P, 6}, float_opts);
-  return std::make_tuple(rendered, out_color, out_flow, out_depth, out_T, radii, geomBuffer, binningBuffer, imgBuffer, covs3D_com);
+  return std::make_tuple(rendered, out_color, out_flow, out_depth, out_T, radii, geomBuffer, binningBuffer, imgBuffer, covs3D_com, out_means3D);
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
  RasterizeGaussiansBackwardCUDA(
  	const torch::Tensor& background,
 	const torch::Tensor& means3D,
+	const torch::Tensor& out_means3D,
 	const torch::Tensor& radii,
     const torch::Tensor& colors,
 	const torch::Tensor& flows_2d,
@@ -211,7 +214,8 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
 	  CudaRasterizer::Rasterizer::backward(P, degree, degree_t, M, R,
 	  background.contiguous().data<float>(),
 	  W, H, 
-	  means3D.contiguous().data<float>(),
+	//   means3D.contiguous().data<float>(),
+	  out_means3D.contiguous().data<float>(),
 	  sh.contiguous().data<float>(),
 	  colors.contiguous().data<float>(),
 	  flows_2d.contiguous().data<float>(),

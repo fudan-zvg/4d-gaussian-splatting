@@ -341,6 +341,7 @@ __device__ void computeCov3D_conditional(const glm::vec3 scale, const float scal
 template<int C>
 __global__ void preprocessCUDA(int P, int D, int D_t, int M,
 	const float* orig_points,
+	float* out_means3D,
 	const float* ts,
 	const glm::vec3* scales,
 	const float* scales_t,
@@ -403,6 +404,9 @@ __global__ void preprocessCUDA(int P, int D, int D_t, int M,
 			rotations[idx], rotations_r[idx], cov3Ds + idx * 6, p_orig, ts[idx], timestamp, idx, time_mask, opacity);
 		if (!time_mask) return;
 		cov3D = cov3Ds + idx * 6;
+		out_means3D[idx*3+0]=p_orig.x;
+		out_means3D[idx*3+1]=p_orig.y;
+		out_means3D[idx*3+2]=p_orig.z;
 	}
 	else
 	{
@@ -641,6 +645,7 @@ void FORWARD::render(
 
 void FORWARD::preprocess(int P, int D, int D_t, int M,
 	const float* means3D,
+	float* out_means3D,
 	const float* ts,
 	const glm::vec3* scales,
 	const float* scales_t,
@@ -674,6 +679,7 @@ void FORWARD::preprocess(int P, int D, int D_t, int M,
 	preprocessCUDA<NUM_CHANNELS> << <(P + 255) / 256, 256 >> > (
 		P, D, D_t, M,
 		means3D,
+		out_means3D,
 		ts,
 		scales,
 		scales_t,

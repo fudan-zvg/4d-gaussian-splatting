@@ -204,6 +204,7 @@ int CudaRasterizer::Rasterizer::forward(
 	const float* background,
 	const int width, int height,
 	const float* means3D,
+	float* out_means3D,
 	const float* shs,
 	const float* colors_precomp,
 	const float* flows_precomp,
@@ -259,6 +260,7 @@ int CudaRasterizer::Rasterizer::forward(
 	CHECK_CUDA(FORWARD::preprocess(
 		P, D, D_t, M,
 		means3D,
+		out_means3D,
 		ts,
 		(glm::vec3*)scales,
 		scales_t,
@@ -365,7 +367,7 @@ void CudaRasterizer::Rasterizer::backward(
 	const int P, int D, int D_t, int M, int R,
 	const float* background,
 	const int width, int height,
-	const float* means3D,
+	const float* out_means3D,
 	const float* shs,
 	const float* colors_precomp,
 	const float* flows_2d,
@@ -455,7 +457,7 @@ void CudaRasterizer::Rasterizer::backward(
 	// use the one we computed ourselves.
 	const float* cov3D_ptr = (cov3D_precomp != nullptr) ? cov3D_precomp : geomState.cov3D;
 	CHECK_CUDA(BACKWARD::preprocess(P, D, D_t, M,
-		(float3*)means3D,
+		(float3*)out_means3D,
 		radii,
 		shs,
 		ts,

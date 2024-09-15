@@ -118,18 +118,18 @@ class _RasterizeGaussians(torch.autograd.Function):
         if raster_settings.debug:
             cpu_args = cpu_deep_copy_tuple(args) # Copy them before they can be corrupted
             try:
-                num_rendered, color, flow, depth, T, radii, geomBuffer, binningBuffer, imgBuffer, covs_com = _C.rasterize_gaussians(*args)
+                num_rendered, color, flow, depth, T, radii, geomBuffer, binningBuffer, imgBuffer, covs_com, out_means3D = _C.rasterize_gaussians(*args)
             except Exception as ex:
                 torch.save(cpu_args, "snapshot_fw.dump")
                 print("\nAn error occured in forward. Please forward snapshot_fw.dump for debugging.")
                 raise ex
         else:
-            num_rendered, color, flow, depth, T, radii, geomBuffer, binningBuffer, imgBuffer, covs_com = _C.rasterize_gaussians(*args)
+            num_rendered, color, flow, depth, T, radii, geomBuffer, binningBuffer, imgBuffer, covs_com, out_means3D = _C.rasterize_gaussians(*args)
 
         # Keep relevant tensors for backward
         ctx.raster_settings = raster_settings
         ctx.num_rendered = num_rendered
-        ctx.save_for_backward(colors_precomp, means3D, scales, rotations, cov3Ds_precomp, radii, sh, 
+        ctx.save_for_backward(colors_precomp, means3D, out_means3D, scales, rotations, cov3Ds_precomp, radii, sh, 
                                 flow_2d, opacities, ts, scales_t, rotations_r,
                                 geomBuffer, binningBuffer, imgBuffer)
         return color, radii, depth, 1-T, flow, covs_com
@@ -140,13 +140,14 @@ class _RasterizeGaussians(torch.autograd.Function):
         # Restore necessary values from context
         num_rendered = ctx.num_rendered
         raster_settings = ctx.raster_settings
-        (colors_precomp, means3D, scales, rotations, cov3Ds_precomp, radii, sh, 
+        (colors_precomp, means3D, out_means3D, scales, rotations, cov3Ds_precomp, radii, sh, 
          flow_2d, opacities, ts, scales_t, rotations_r,
          geomBuffer, binningBuffer, imgBuffer) = ctx.saved_tensors
         
         # Restructure args as C++ method expects them
         args = (raster_settings.bg,
                 means3D, 
+                out_means3D,
                 radii, 
                 colors_precomp, 
                 flow_2d,
