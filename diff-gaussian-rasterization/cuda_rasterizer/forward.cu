@@ -298,18 +298,32 @@ __device__ void computeCov3D_conditional(const glm::vec3 scale, const float scal
 	float r = rot_r.z;
 	float s = rot_r.w;
 
+	// glm::mat4 M_l = glm::mat4(
+	// 	a, -b, -c, -d,
+	// 	b, a,-d, c,
+	// 	c, d, a,-b,
+	// 	d,-c, b, a
+	// );
+
+	// glm::mat4 M_r = glm::mat4(
+	// 	p, q, r, s,
+	// 	-q, p,-s, r,
+	// 	-r, s, p,-q,
+	// 	-s,-r, q, p
+	// );
+	
 	glm::mat4 M_l = glm::mat4(
-		a, -b, -c, -d,
-		b, a,-d, c,
-		c, d, a,-b,
-		d,-c, b, a
+		 a,  b, -c,  d,
+		-b,  a,  d,  c,
+		 c, -d,  a,  b,
+		-d, -c, -b,  a
 	);
 
 	glm::mat4 M_r = glm::mat4(
-		p, q, r, s,
-		-q, p,-s, r,
-		-r, s, p,-q,
-		-s,-r, q, p
+		p,  q, -r, -s,
+		-q, p,  s, -r,
+		r, -s,  p, -q,
+		s,  r,  q,  p
 	);
 	// glm stores in column major
 	glm::mat4 R = M_r * M_l;

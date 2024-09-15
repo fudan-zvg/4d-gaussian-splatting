@@ -675,18 +675,32 @@ __device__ void computeCov3D_conditional(int idx, const glm::vec3 scale, const f
 	float r = rot_r.z;
 	float s = rot_r.w;
 
+	// glm::mat4 M_l = glm::mat4(
+	// 	a, -b, -c, -d,
+	// 	b, a,-d, c,
+	// 	c, d, a,-b,
+	// 	d,-c, b, a
+	// );
+
+	// glm::mat4 M_r = glm::mat4(
+	// 	p, q, r, s,
+	// 	-q, p,-s, r,
+	// 	-r, s, p,-q,
+	// 	-s,-r, q, p
+	// );
+
 	glm::mat4 M_l = glm::mat4(
-		a, -b, -c, -d,
-		b, a,-d, c,
-		c, d, a,-b,
-		d,-c, b, a
+		 a,  b, -c,  d,
+		-b,  a,  d,  c,
+		 c, -d,  a,  b,
+		-d, -c, -b,  a
 	);
 
 	glm::mat4 M_r = glm::mat4(
-		p, q, r, s,
-		-q, p,-s, r,
-		-r, s, p,-q,
-		-s,-r, q, p
+		p,  q, -r, -s,
+		-q, p,  s, -r,
+		r, -s,  p, -q,
+		s,  r,  q,  p
 	);
 	// glm stores in column major
 	glm::mat4 R = M_r * M_l;
@@ -760,17 +774,25 @@ __device__ void computeCov3D_conditional(int idx, const glm::vec3 scale, const f
 	glm::mat4 dL_dml_t = dL_dMt * M_r;
 // 	dL_dml_t = glm::transpose(dL_dml_t);
     glm::vec4 dL_drot(0.0f);
+	// dL_drot.x = dL_dml_t[0][0] + dL_dml_t[1][1] + dL_dml_t[2][2] + dL_dml_t[3][3];
+	// dL_drot.y = dL_dml_t[0][1] - dL_dml_t[1][0] + dL_dml_t[2][3] - dL_dml_t[3][2];
+	// dL_drot.z = dL_dml_t[0][2] - dL_dml_t[1][3] - dL_dml_t[2][0] + dL_dml_t[3][1];
+	// dL_drot.w = dL_dml_t[0][3] + dL_dml_t[1][2] - dL_dml_t[2][1] - dL_dml_t[3][0];
 	dL_drot.x = dL_dml_t[0][0] + dL_dml_t[1][1] + dL_dml_t[2][2] + dL_dml_t[3][3];
-	dL_drot.y = dL_dml_t[0][1] - dL_dml_t[1][0] + dL_dml_t[2][3] - dL_dml_t[3][2];
+	dL_drot.y = -dL_dml_t[0][1] + dL_dml_t[1][0] - dL_dml_t[2][3] + dL_dml_t[3][2];
 	dL_drot.z = dL_dml_t[0][2] - dL_dml_t[1][3] - dL_dml_t[2][0] + dL_dml_t[3][1];
-	dL_drot.w = dL_dml_t[0][3] + dL_dml_t[1][2] - dL_dml_t[2][1] - dL_dml_t[3][0];
+	dL_drot.w = -dL_dml_t[0][3] - dL_dml_t[1][2] + dL_dml_t[2][1] + dL_dml_t[3][0];
 
     glm::mat4 dL_dmr_t = M_l * dL_dMt;
     glm::vec4 dL_drot_r(0.0f);
+	// dL_drot_r.x = dL_dmr_t[0][0] + dL_dmr_t[1][1] + dL_dmr_t[2][2] + dL_dmr_t[3][3];
+	// dL_drot_r.y = -dL_dmr_t[0][1] + dL_dmr_t[1][0] + dL_dmr_t[2][3] - dL_dmr_t[3][2];
+	// dL_drot_r.z = -dL_dmr_t[0][2] - dL_dmr_t[1][3] + dL_dmr_t[2][0] + dL_dmr_t[3][1];
+	// dL_drot_r.w = -dL_dmr_t[0][3] + dL_dmr_t[1][2] - dL_dmr_t[2][1] + dL_dmr_t[3][0];
 	dL_drot_r.x = dL_dmr_t[0][0] + dL_dmr_t[1][1] + dL_dmr_t[2][2] + dL_dmr_t[3][3];
 	dL_drot_r.y = -dL_dmr_t[0][1] + dL_dmr_t[1][0] + dL_dmr_t[2][3] - dL_dmr_t[3][2];
-	dL_drot_r.z = -dL_dmr_t[0][2] - dL_dmr_t[1][3] + dL_dmr_t[2][0] + dL_dmr_t[3][1];
-	dL_drot_r.w = -dL_dmr_t[0][3] + dL_dmr_t[1][2] - dL_dmr_t[2][1] + dL_dmr_t[3][0];
+	dL_drot_r.z = dL_dmr_t[0][2] + dL_dmr_t[1][3] - dL_dmr_t[2][0] - dL_dmr_t[3][1];
+	dL_drot_r.w = dL_dmr_t[0][3] - dL_dmr_t[1][2] + dL_dmr_t[2][1] - dL_dmr_t[3][0];
 
     dL_drots[idx] = dL_drot;
     dL_drots_r[idx] = dL_drot_r;

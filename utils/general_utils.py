@@ -129,6 +129,7 @@ def build_rotation_4d(l, r):
                        -r, s, p,-q,
                        -s,-r, q, p]).view(4,4,-1).permute(2,0,1)
     A = M_l @ M_r
+    A = A.flip(1,2)
     return A
 
 def build_scaling_rotation_4d(s, l, r):
