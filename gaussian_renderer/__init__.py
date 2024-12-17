@@ -15,8 +15,10 @@ import math
 from .diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh, eval_shfs_4d
+from collections import defaultdict
+import time
 
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None):
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None, count_time = False):
     """
     Render the scene. 
     
@@ -145,6 +147,10 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             flow_2d = flow_2d[mask]
     
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
+    
+    ellipse_time = 0
+    torch.cuda.synchronize()
+    tic = time.time()
     rendered_image, radii, depth, alpha, flow, covs_com = rasterizer(
         means3D = means3D,
         means2D = means2D,
@@ -158,6 +164,8 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         rotations = rotations,
         rotations_r = rotations_r,
         cov3D_precomp = cov3D_precomp)
+    torch.cuda.synchronize()
+    ellipse_time += time.time() - tic
     
     if pipe.env_map_res:
         assert pc.env_map is not None
@@ -182,10 +190,19 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
 
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.
-    return {"render": rendered_image,
-            "viewspace_points": screenspace_points,
-            "visibility_filter" : radii_all > 0,
-            "radii": radii_all,
-            "depth": depth,
-            "alpha": alpha,
-            "flow": flow}
+    if count_time:
+        return {"render": rendered_image,
+                "viewspace_points": screenspace_points,
+                "visibility_filter" : radii_all > 0,
+                "radii": radii_all,
+                "depth": depth,
+                "alpha": alpha,
+                "flow": flow}, ellipse_time
+    else:
+        return {"render": rendered_image,
+                "viewspace_points": screenspace_points,
+                "visibility_filter" : radii_all > 0,
+                "radii": radii_all,
+                "depth": depth,
+                "alpha": alpha,
+                "flow": flow}

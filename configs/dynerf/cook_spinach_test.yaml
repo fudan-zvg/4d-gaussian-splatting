@@ -7,6 +7,7 @@ force_sh_3d: False
 batch_size: 4
 exhaust_test: True
 start_checkpoint: "output/N3V/cook_spinach/chkpnt_best.pth"
+val: True
 
 ModelParams:
   sh_degree: 1
