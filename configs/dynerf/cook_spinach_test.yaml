@@ -10,7 +10,7 @@ start_checkpoint: "output/N3V/cook_spinach/chkpnt_best.pth"
 val: True
 
 ModelParams:
-  sh_degree: 1
+  sh_degree: 3
   source_path: "/home/zhangyidi/Projects/4DGS/data/N3V/cook_spinach"
   model_path: "output/N3V/cook_spinach"
   images: "images"

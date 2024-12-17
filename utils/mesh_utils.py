@@ -109,7 +109,6 @@ class GaussianExtractor(object):
         """
         self.clean()
         self.viewpoint_stack = viewpoint_stack
-        ellipse_time = 0
         metrics = defaultdict(list)
         
         lpips = LearnedPerceptualImagePatchSimilarity(
@@ -118,12 +117,10 @@ class GaussianExtractor(object):
         
         for i, viewpoint_cam in tqdm(enumerate(self.viewpoint_stack), desc="reconstruct radiance fields"):
             if stage == "validation":
-                render_pkg, time = self.render(viewpoint_cam[1].cuda(), self.gaussians,count_time = True)
+                render_pkg = self.render(viewpoint_cam[1].cuda(), self.gaussians)
                 gt_image = viewpoint_cam[0].cuda()
-                ellipse_time += time
-
             else:
-                render_pkg, time = self.render(viewpoint_cam.cuda(), self.gaussians, count_time = True)
+                render_pkg = self.render(viewpoint_cam.cuda(), self.gaussians)
                 
             rgb = render_pkg['render']
             alpha = render_pkg['alpha']
@@ -140,17 +137,14 @@ class GaussianExtractor(object):
                 metrics["ssim"].append(ssim(gt_image, rgb))
                 # metrics["lpips"].append(lpips(gt_image.unsqueeze(0), rgb.unsqueeze(0)))
         if stage == "validation":
-            ellipse_time /= (i + 1)
             stats = {k: torch.stack(v).mean().item() for k, v in metrics.items()}
             stats.update(
                 {
-                    "ellipse_time": ellipse_time,
                     "num_GS": self.gaussians.get_xyz.shape[0],
                 }
             )
             print(
                 f"PSNR: {stats['psnr']:.3f}, SSIM: {stats['ssim']:.4f} "
-                f"Time: {stats['ellipse_time']:.3f}s/image "
                 f"Number of GS: {stats['num_GS']}"
             )
             # save stats as json
