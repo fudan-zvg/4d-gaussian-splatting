@@ -10,8 +10,9 @@
     <link href="css/bootstrap-4.4.1.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="css/dics.min.css">
-<!--    <link href="https://db.onlinewebfonts.com/c/d02befc8fdd8e5315fb21fa7f38fd55a?family=Shree+Devanagari+714" rel="stylesheet">-->
+    <!-- <link href="https://db.onlinewebfonts.com/c/d02befc8fdd8e5315fb21fa7f38fd55a?family=Shree+Devanagari+714" rel="stylesheet">-->
     <!-- <link rel="stylesheet" href="css/bulma.min.css"> -->
+    <link rel="stylesheet" href="css/title.css">
     <script src="scripts/dics.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', domReady);
@@ -29,33 +30,39 @@
 
 <body>
 
-    <section>
-        <div class="text-center mt-4">
-            <div class="container">
-                <div class="row">
-                    <div class="col-12">
-                        <h1>Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting</h1>
-                        <h3>ICLR 2024</h3>
-                        <hr>
-                        <h5> 
-                            Zeyu Yang,
-                            Hongye Yang,
-                            Zijie Pan,
-                            <a href="https://lzrobots.github.io/">Li Zhang</a><sup><a href="mailto:lizhangfd@fudan.edu.cn"><i class="fa fa-envelope"></i></a></sup>
-                        </h5>
-                        <h5 style="color:#000000;">
-                            Fudan University
-                        </h5>
-                        <br>
-                        <p>
-                            <a class="btn btn-secondary btn-lg" href="https://arxiv.org/pdf/2310.10642" role="button">Paper</a>
-                            <a class="btn btn-secondary btn-lg" href="https://github.com/fudan-zvg/4d-gaussian-splatting" role="button">Code</a>
-                        </p>
-                    </div>
-                </div>
-            </div>
+<section class="container mt-5" style="max-width: 1300px;">
+    <div class="papers-container">
+      <div class="paper-card">
+        <div class="paper-title">
+          Real-time Photorealistic Dynamic Scene Representation<br>
+          and Rendering with 4D Gaussian Splatting
         </div>
-    </section>
+        <div class="paper-conf">ICLR 2024</div>
+        <div class="paper-authors">
+          Zeyu Yang, Hongye Yang, Zijie Pan, <a href="https://lzrobots.github.io/">Li Zhang</a><sup><a href="mailto:lizhangfd@fudan.edu.cn"><i class="fa fa-comment-o"></i></a></sup>
+        </div>
+        <div class="paper-affil">Fudan University</div>
+      </div>
+
+      <div class="paper-card">
+        <div class="paper-title">
+          4D Gaussian Splatting: Modeling Dynamic Scenes<br>
+          with Native 4D Primitives
+        </div>
+        <div class="paper-conf">Extended Paper</div>
+        <div class="paper-authors">
+          Zeyu Yang<sup>1</sup>, Zijie Pan<sup>1</sup>, Xiatian Zhu<sup>2</sup>, Jianfeng Feng<sup>1</sup>, Yu-Gang Jiang<sup>1</sup>, <a href="https://lzrobots.github.io/">Li Zhang</a><sup><a href="mailto:lizhangfd@fudan.edu.cn">1<i class="fa fa-comment-o"></i></a></sup>
+        </div>
+        <div class="paper-affil"><sup>1</sup>Fudan University, <sup>2</sup>University of Surrey</div>
+      </div>
+    </div>
+
+    <div class="global-links">
+        <a class="btn btn-secondary" href="https://arxiv.org/pdf/2310.10642" role="button">Paper (ICLR)</a>
+        <a class="btn btn-secondary" href="https://arxiv.org/abs/2412.20720" role="button">Extended Paper</a>
+        <a class="btn btn-secondary" href="https://github.com/fudan-zvg/4d-gaussian-splatting" role="button">Code</a>
+    </div>
+</section>
     <br>
     <br>
 
