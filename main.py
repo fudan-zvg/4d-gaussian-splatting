@@ -28,12 +28,56 @@ import numpy as np
 from omegaconf import OmegaConf
 from omegaconf.dictconfig import DictConfig
 from torch.utils.data import DataLoader
+
+from utils.mesh_utils import GaussianExtractor, to_cam_open3d, post_process_mesh
+from utils.render_utils import generate_path, create_videos
+import open3d as o3d
+
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
 except ImportError:
     TENSORBOARD_FOUND = False
 
+def validation(dataset, opt, pipe,checkpoint, gaussian_dim, time_duration, rot_4d, force_sh_3d,
+               num_pts, num_pts_ratio):
+
+    bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
+    background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
+    
+    gaussians = GaussianModel(dataset.sh_degree, gaussian_dim=gaussian_dim, time_duration=time_duration, 
+                              rot_4d=rot_4d, force_sh_3d=force_sh_3d, sh_degree_t=2 if pipe.eval_shfs_4d else 0)
+    
+    assert checkpoint, "No checkpoint provided for validation"
+    scene = Scene(dataset, gaussians, shuffle=False,num_pts=num_pts, num_pts_ratio=num_pts_ratio, time_duration=time_duration)
+    
+    (model_params, first_iter) = torch.load(checkpoint)
+    train_dir = os.path.join(dataset.model_path, 'train', "ours_{}".format(first_iter))
+    test_dir = os.path.join(dataset.model_path, 'test', "ours_{}".format(first_iter))
+    gaussians.restore(model_params, None)
+    gaussExtractor = GaussianExtractor(gaussians, render, pipe, bg_color=bg_color)   
+    
+    #########   1. Validation and Rendering ############
+
+    print("export rendered testing images ...")
+    os.makedirs(test_dir, exist_ok=True)
+    gaussExtractor.reconstruction(scene.getTestCameras(),test_dir,stage = "validation")
+    gaussExtractor.export_image(test_dir,mode = "validation")
+
+    #########    2. Render Trajectory       ############
+    
+    print("rendering trajectory ...")
+    traj_dir = os.path.join(test_dir, 'traj')
+    os.makedirs(traj_dir, exist_ok=True)
+    n_fames = 480
+    cam_traj = generate_path(scene.getTrainCameras(), n_frames=n_fames)
+    gaussExtractor.reconstruction(cam_traj, test_dir,stage = "trajectory")
+    gaussExtractor.export_image(traj_dir,mode = "trajectory")
+    create_videos( base_dir =traj_dir,
+                   input_dir=traj_dir, 
+                   out_name='render_traj', 
+                   num_frames=n_fames)
+    
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint, debug_from,
              gaussian_dim, time_duration, num_pts, num_pts_ratio, rot_4d, force_sh_3d, batch_size):
     
@@ -373,6 +417,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--seed", type=int, default=6666)
     parser.add_argument("--exhaust_test", action="store_true")
+    parser.add_argument("--val", action="store_true", default=False)
     
     args = parser.parse_args(sys.argv[1:])
     args.save_iterations.append(args.iterations)
@@ -399,8 +444,13 @@ if __name__ == "__main__":
     safe_state(args.quiet)
 
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
-    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.start_checkpoint, args.debug_from,
-             args.gaussian_dim, args.time_duration, args.num_pts, args.num_pts_ratio, args.rot_4d, args.force_sh_3d, args.batch_size)
+    if cfg.val == False:
+        training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.start_checkpoint, args.debug_from,
+                args.gaussian_dim, args.time_duration, args.num_pts, args.num_pts_ratio, args.rot_4d, args.force_sh_3d, args.batch_size)
 
-    # All done
-    print("\nTraining complete.")
+    else:
+        validation(lp.extract(args), op.extract(args), pp.extract(args),args.start_checkpoint,args.gaussian_dim, 
+                   args.time_duration,args.rot_4d, args.force_sh_3d, args.num_pts, args.num_pts_ratio)
+        
+
+    print("\nComplete.")

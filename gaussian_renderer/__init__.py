@@ -15,6 +15,7 @@ import math
 from .diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh, eval_shfs_4d
+from collections import defaultdict
 
 def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None):
     """
@@ -145,6 +146,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             flow_2d = flow_2d[mask]
     
     # Rasterize visible Gaussians to image, obtain their radii (on screen). 
+
     rendered_image, radii, depth, alpha, flow, covs_com = rasterizer(
         means3D = means3D,
         means2D = means2D,
@@ -158,6 +160,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         rotations = rotations,
         rotations_r = rotations_r,
         cov3D_precomp = cov3D_precomp)
+
     
     if pipe.env_map_res:
         assert pc.env_map is not None

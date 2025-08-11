@@ -90,6 +90,8 @@ class Scene:
 
     def save(self, iteration):
         torch.save((self.gaussians.capture(), iteration), self.model_path + "/chkpnt" + str(iteration) + ".pth")
+        point_cloud_path = os.path.join(self.model_path, "point_cloud/iteration_{}".format(iteration))
+        self.gaussians.save_ply(os.path.join(point_cloud_path, "point_cloud.ply"))
 
     def getTrainCameras(self, scale=1.0):
         return CameraDataset(self.train_cameras[scale].copy(), self.white_background)

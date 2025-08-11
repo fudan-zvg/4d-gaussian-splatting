@@ -26,4 +26,3 @@ def easy_cmap(x: torch.Tensor):
     x_rgb[1] = torch.clamp(x_normalize, 0, 1)
     x_rgb[2] = torch.clamp(x_normalize, 0, 1)
     return x_rgb
-
