@@ -59,6 +59,11 @@ class ModelParams(ParamGroup):
         self.loaded_pth = ""
         self.frame_ratio = 1
         self.dataloader = False
+        self.real_fov = False
+        self.start_frame = 0 # only for waymo
+        self.end_frame = 50 # only for waymo
+        self.cam_num = 3 # only for waymo
+        self.time_scale_factor = 5.0 # only for waymo
         super().__init__(parser, "Loading Parameters", sentinel)
 
     def extract(self, args):
@@ -75,6 +80,11 @@ class PipelineParams(ParamGroup):
         self.env_optimize_until = 1000000000
         self.env_optimize_from = 0
         self.eval_shfs_4d = False
+        
+        self.vq_attributes = []
+        self.qa_attributes = []
+        self.vq_finetune_iters = 0
+        
         super().__init__(parser, "Pipeline Parameters")
 
 class OptimizationParams(ParamGroup):
@@ -104,6 +114,18 @@ class OptimizationParams(ParamGroup):
         self.lambda_opa_mask = 0.0
         self.lambda_rigid = 0.0
         self.lambda_motion = 0.0
+
+        # for waymo
+        self.lambda_sky_l1_disparity = 0.0
+        self.lambda_inv_depth_smooth = 0.0
+        self.lambda_lidar = 0.0
+        self.lambda_quant_reg = 0.0
+        self.lambda_self_supervision = -1.0
+        self.warm_up = -1
+        self.scaling_t_lr = 0.005
+        self.split_t = True
+        self.opa_thresh_4d = 0.3
+        
         super().__init__(parser, "Optimization Parameters")
 
 def get_combined_args(parser : ArgumentParser):

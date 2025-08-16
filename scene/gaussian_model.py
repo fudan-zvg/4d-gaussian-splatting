@@ -22,6 +22,27 @@ from utils.graphics_utils import BasicPointCloud
 from utils.general_utils import strip_symmetric, build_scaling_rotation
 from utils.sh_utils import sh_channels_4d
 
+from typing import List, Optional
+
+import torch.nn.functional as F
+
+from vector_quantize_pytorch import VectorQuantize, ResidualVQ
+
+from dahuffman import HuffmanCodec
+import math
+from tqdm import tqdm
+
+class FakeQuantizationHalf(torch.autograd.Function):
+    """performs fake quantization for half precision"""
+
+    @staticmethod
+    def forward(_, x: torch.Tensor) -> torch.Tensor:
+        return x.half().float()
+
+    @staticmethod
+    def backward(_, grad_output: torch.Tensor) -> torch.Tensor:
+        return grad_output
+
 class GaussianModel:
 
     def setup_functions(self):
@@ -31,7 +52,7 @@ class GaussianModel:
             symm = strip_symmetric(actual_covariance)
             return symm
         
-        def build_covariance_from_scaling_rotation_4d(scaling, scaling_modifier, rotation_l, rotation_r, dt=0.0):
+        def build_covariance_from_scaling_rotation_4d(scaling, scaling_modifier, rotation_l, rotation_r, dt=0.0, return_covt=False):
             L = build_scaling_rotation_4d(scaling_modifier * scaling, rotation_l, rotation_r)
             actual_covariance = L @ L.transpose(1, 2)
             cov_11 = actual_covariance[:,:3,:3]
@@ -44,7 +65,10 @@ class GaussianModel:
                 mean_offset = mean_offset[..., None]  # [num_pts, num_time, 3, 1]
             else:
                 mean_offset = cov_12.squeeze(-1) / cov_t.squeeze(-1) * dt
-            return symm, mean_offset.squeeze(-1)
+            if not return_covt:
+                return symm, mean_offset.squeeze(-1)
+            else:
+                return symm, mean_offset.squeeze(-1), cov_t.squeeze(-1)
         
         self.scaling_activation = torch.exp
         self.scaling_inverse_activation = torch.log
@@ -60,7 +84,10 @@ class GaussianModel:
         self.rotation_activation = torch.nn.functional.normalize
 
 
-    def __init__(self, sh_degree : int, gaussian_dim : int = 3, time_duration: list = [-0.5, 0.5], rot_4d: bool = False, force_sh_3d: bool = False, sh_degree_t : int = 0):
+    def __init__(self, sh_degree : int, gaussian_dim : int = 3, time_duration: list = [-0.5, 0.5], rot_4d: bool = False, force_sh_3d: bool = False, sh_degree_t : int = 0,
+                 vq_attributes: List[str] = [],
+                 qa_attributes: List[str] = [],
+                 ):
         self.active_sh_degree = 0
         self.max_sh_degree = sh_degree  
         self._xyz = torch.empty(0)
@@ -90,8 +117,16 @@ class GaussianModel:
         
         self.active_sh_degree_t = 0
         self.max_sh_degree_t = sh_degree_t
+        self.vq_attributes = vq_attributes
+        self.qa_attributes = qa_attributes
+        self.indexed = False
+        self.quantization = False
+        self.split_t = True
         
         self.setup_functions()
+
+        self.hybrid = False
+        self.hybrid_mask = None
 
     def capture(self):
         if self.gaussian_dim == 3:
@@ -175,27 +210,86 @@ class GaussianModel:
 
     @property
     def get_scaling(self):
-        return self.scaling_activation(self._scaling)
+        if not (self.indexed and '_scaling' in self.vq_attributes):
+            return self.scaling_activation(self._scaling)
+        else:
+            if self.quantization and '_scaling' in self.qa_attributes:
+                return self.scaling_activation(
+                    self.scaling_qa(self.vq_scaling_model.get_codes_from_indices(self.rvq_indices_scaling).sum(dim=0).squeeze(0))
+                )
+            else:
+                return self.scaling_activation(
+                    self.vq_scaling_model.get_codes_from_indices(self.rvq_indices_scaling).sum(dim=0).squeeze(0)
+                )
     
     @property
     def get_scaling_t(self):
-        return self.scaling_activation(self._scaling_t)
-    
+        return self.scaling_activation(self._scaling_t if not self.hybrid else self.scaling_t_hybrid)
+
+    @property
+    def scaling_t_hybrid(self):
+        scaling_t = self._scaling_t.clone()
+        scaling_t[self.hybrid_mask] = self.init_scales_t
+        return scaling_t
+
+    @property
+    def rotation_r_hybrid(self):
+        rotation_r = self._rotation_r.clone()
+        rotation_r[self.hybrid_mask] = self._rotation[self.hybrid_mask]
+        return rotation_r
+
     @property
     def get_scaling_xyzt(self):
-        return self.scaling_activation(torch.cat([self._scaling, self._scaling_t], dim = 1))
-    
+        if not (self.indexed and '_scaling' in self.vq_attributes):
+            return self.scaling_activation(torch.cat([self._scaling, self._scaling_t if not self.hybrid else self.scaling_t_hybrid], dim = 1))
+        else:
+            if self.quantization and '_scaling' in self.qa_attributes:
+                return self.scaling_activation(
+                    torch.cat([
+                        self.scaling_qa(self.vq_scaling_model.get_codes_from_indices(self.rvq_indices_scaling).sum(dim=0).squeeze(0))
+                    , self._scaling_t], dim = 1)
+                )
+            else:    
+                return self.scaling_activation(
+                    torch.cat([self.vq_scaling_model.get_codes_from_indices(self.rvq_indices_scaling).sum(dim=0).squeeze(0), self._scaling_t], dim = 1)
+                )
     @property
     def get_rotation(self):
-        return self.rotation_activation(self._rotation)
+        if not (self.indexed and '_rotation' in self.vq_attributes):
+            return self.rotation_activation(self._rotation)
+        else:
+            if self.quantization and '_rotation' in self.qa_attributes:
+                return self.rotation_activation(
+                    self.rotation_qa(self.vq_rotation_model.get_codes_from_indices(self.rvq_indices_rotation).sum(dim=0).squeeze(0))
+                )
+            else:
+                return self.rotation_activation(
+                    self.vq_rotation_model.get_codes_from_indices(self.rvq_indices_rotation).sum(dim=0).squeeze(0)
+                )
     
     @property
     def get_rotation_r(self):
-        return self.rotation_activation(self._rotation_r)
+        if not (self.indexed and '_rotation' in self.vq_attributes):
+            if not self.hybrid:
+                return self.rotation_activation(self._rotation_r)
+            else:
+                return self.rotation_activation(self.rotation_r_hybrid)
+        else:
+            if self.quantization and '_rotation' in self.qa_attributes:
+                return self.rotation_activation(
+                    self.rotation_qa(self.vq_rotation_model.get_codes_from_indices(self.rvq_indices_rotation_r).sum(dim=0).squeeze(0))
+                )
+            else:
+                return self.rotation_activation(
+                    self.vq_rotation_model.get_codes_from_indices(self.rvq_indices_rotation_r).sum(dim=0).squeeze(0)
+                )
     
     @property
     def get_xyz(self):
-        return self._xyz
+        if self.quantization and '_xyz' in self.qa_attributes:
+            return self.position_qa(self._xyz)
+        else:
+            return self._xyz
     
     @property
     def get_t(self):
@@ -203,17 +297,26 @@ class GaussianModel:
     
     @property
     def get_xyzt(self):
-        return torch.cat([self._xyz, self._t], dim = 1)
+        return torch.cat([self.get_xyz, self.get_t], dim = 1)
     
     @property
     def get_features(self):
-        features_dc = self._features_dc
-        features_rest = self._features_rest
+        if not (self.indexed and '_features_dc' in self.vq_attributes):
+            features_dc = self._features_dc
+        else:
+            features_dc = self.vq_features_dc_model.get_codes_from_indices(self.rvq_indices_features_dc).sum(dim=0).squeeze(0).unsqueeze(1).contiguous()
+        if not (self.indexed and '_features_rest' in self.vq_attributes):
+            features_rest = self._features_rest
+        else:
+            features_rest = self.vq_features_rest_model.get_codes_from_indices(self.rvq_indices_features_rest).sum(dim=0).squeeze(0).view(self._features_rest.shape[0], -1, 3).contiguous()
         return torch.cat((features_dc, features_rest), dim=1)
     
     @property
     def get_opacity(self):
-        return self.opacity_activation(self._opacity)
+        if self.quantization and '_opacity' in self.qa_attributes:
+            return self.opacity_qa(self.opacity_activation(self._opacity))
+        else:
+            return self.opacity_activation(self._opacity)
     
     @property
     def get_max_sh_channels(self):
@@ -226,7 +329,7 @@ class GaussianModel:
     
     def get_cov_t(self, scaling_modifier = 1):
         if self.rot_4d:
-            L = build_scaling_rotation_4d(scaling_modifier * self.get_scaling_xyzt, self._rotation, self._rotation_r)
+            L = build_scaling_rotation_4d(scaling_modifier * self.get_scaling_xyzt, self._rotation, self._rotation_r if not self.hybrid else self.rotation_r_hybrid)
             actual_covariance = L @ L.transpose(1, 2)
             return actual_covariance[:,3,3].unsqueeze(1)
         else:
@@ -239,11 +342,12 @@ class GaussianModel:
     def get_covariance(self, scaling_modifier = 1):
         return self.covariance_activation(self.get_scaling, scaling_modifier, self._rotation)
     
-    def get_current_covariance_and_mean_offset(self, scaling_modifier = 1, timestamp = 0.0):
+    def get_current_covariance_and_mean_offset(self, scaling_modifier = 1, timestamp = 0.0, return_covt=False):
         return self.covariance_activation(self.get_scaling_xyzt, scaling_modifier, 
                                                               self._rotation, 
-                                                              self._rotation_r,
-                                                              dt = timestamp - self.get_t)
+                                                              self._rotation_r if not self.hybrid else self.rotation_r_hybrid,
+                                                              dt = timestamp - self.get_t,
+                                                              return_covt=return_covt)
 
     def oneupSHdegree(self):
         if self.active_sh_degree < self.max_sh_degree:
@@ -251,7 +355,7 @@ class GaussianModel:
         elif self.max_sh_degree_t and self.active_sh_degree_t < self.max_sh_degree_t:
             self.active_sh_degree_t += 1
 
-    def create_from_pcd(self, pcd : BasicPointCloud, spatial_lr_scale : float):
+    def create_from_pcd(self, pcd : BasicPointCloud, spatial_lr_scale : float, time_scale_factor: float = 5.0):
         self.spatial_lr_scale = spatial_lr_scale
         fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().cuda()
         fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
@@ -272,11 +376,12 @@ class GaussianModel:
         rots[:, 0] = 1
         if self.gaussian_dim == 4:
             # dist_t = torch.clamp_min(distCUDA2(fused_times.repeat(1,3)), 1e-10)[...,None]
-            dist_t = torch.zeros_like(fused_times, device="cuda") + (self.time_duration[1] - self.time_duration[0]) / 5
+            dist_t = torch.zeros_like(fused_times, device="cuda") + (self.time_duration[1] - self.time_duration[0]) / time_scale_factor
             scales_t = torch.log(torch.sqrt(dist_t))
             if self.rot_4d:
                 rots_r = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
                 rots_r[:, 0] = 1
+            self.init_scales_t = scales_t[0,0].detach().clone()
 
         opacities = inverse_sigmoid(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
 
@@ -341,7 +446,7 @@ class GaussianModel:
                 training_args.position_t_lr_init = training_args.position_lr_init
             self.t_gradient_accum = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
             l.append({'params': [self._t], 'lr': training_args.position_t_lr_init * self.spatial_lr_scale, "name": "t"})
-            l.append({'params': [self._scaling_t], 'lr': training_args.scaling_lr, "name": "scaling_t"})
+            l.append({'params': [self._scaling_t], 'lr': training_args.scaling_t_lr, "name": "scaling_t"})
             if self.rot_4d:
                 l.append({'params': [self._rotation_r], 'lr': training_args.rotation_lr, "name": "rotation_r"})
 
@@ -424,6 +529,20 @@ class GaussianModel:
                 self._rotation_r = optimizable_tensors['rotation_r']
             self.t_gradient_accum = self.t_gradient_accum[valid_points_mask]
 
+        if self.hybrid:
+            self.hybrid_mask = self.hybrid_mask[valid_points_mask]
+        
+        if self.indexed:
+            if '_scaling' in self.vq_attributes:
+                self.rvq_indices_scaling = self.rvq_indices_scaling[:,valid_points_mask]
+            if '_rotation' in self.vq_attributes:
+                self.rvq_indices_rotation = self.rvq_indices_rotation[:,valid_points_mask]
+                self.rvq_indices_rotation_r = self.rvq_indices_rotation_r[:,valid_points_mask]
+            if '_features_dc' in self.vq_attributes:
+                self.rvq_indices_features_dc = self.rvq_indices_features_dc[:,valid_points_mask]
+            if '_features_rest' in self.vq_attributes:
+                self.rvq_indices_features_rest = self.rvq_indices_features_rest[:,valid_points_mask]
+
     def cat_tensors_to_optimizer(self, tensors_dict):
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
@@ -493,7 +612,7 @@ class GaussianModel:
         new_features_dc = self._features_dc[selected_pts_mask].repeat(N,1,1)
         new_features_rest = self._features_rest[selected_pts_mask].repeat(N,1,1)
         new_opacity = self._opacity[selected_pts_mask].repeat(N,1)
-        
+
         if not self.rot_4d:
             stds = self.get_scaling[selected_pts_mask].repeat(N,1)
             means = torch.zeros((stds.size(0), 3),device="cuda")
@@ -508,18 +627,21 @@ class GaussianModel:
                 means_t = torch.zeros((stds_t.size(0), 1),device="cuda")
                 samples_t = torch.normal(mean=means_t, std=stds_t)
                 new_t = samples_t + self.get_t[selected_pts_mask].repeat(N, 1)
-                new_scaling_t = self.scaling_inverse_activation(self.get_scaling_t[selected_pts_mask].repeat(N,1) / (0.8*N))
+                new_scaling_t = self.scaling_inverse_activation(self.get_scaling_t[selected_pts_mask].repeat(N,1) / ((0.8*N) if self.split_t else 1.0))
         else:
             stds = self.get_scaling_xyzt[selected_pts_mask].repeat(N,1)
             means = torch.zeros((stds.size(0), 4),device="cuda")
             samples = torch.normal(mean=means, std=stds)
-            rots = build_rotation_4d(self._rotation[selected_pts_mask], self._rotation_r[selected_pts_mask]).repeat(N,1,1)
+            rots = build_rotation_4d(self._rotation[selected_pts_mask], self._rotation_r[selected_pts_mask] if not self.hybrid else self.rotation_r_hybrid[selected_pts_mask]).repeat(N,1,1)
             new_xyzt = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.get_xyzt[selected_pts_mask].repeat(N, 1)
             new_xyz = new_xyzt[...,0:3]
             new_t = new_xyzt[...,3:4]
-            new_scaling_t = self.scaling_inverse_activation(self.get_scaling_t[selected_pts_mask].repeat(N,1) / (0.8*N))
+            new_scaling_t = self.scaling_inverse_activation(self.get_scaling_t[selected_pts_mask].repeat(N,1) / ((0.8*N) if self.split_t else 1.0))
             new_rotation_r = self._rotation_r[selected_pts_mask].repeat(N,1)
 
+        if self.hybrid:
+            new_hybrid_mask = self.hybrid_mask[selected_pts_mask].repeat(N)
+            self.hybrid_mask = torch.cat([self.hybrid_mask, new_hybrid_mask], dim=0)
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation, new_t, new_scaling_t, new_rotation_r)
 
         prune_filter = torch.cat((selected_pts_mask, torch.zeros(N * selected_pts_mask.sum(), device="cuda", dtype=bool)))
@@ -546,6 +668,9 @@ class GaussianModel:
             new_scaling_t = self._scaling_t[selected_pts_mask]
             if self.rot_4d:
                 new_rotation_r = self._rotation_r[selected_pts_mask]
+        if self.hybrid:
+            new_hybrid_mask = self.hybrid_mask[selected_pts_mask]
+            self.hybrid_mask = torch.cat([self.hybrid_mask, new_hybrid_mask], dim=0)
 
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation, new_t, new_scaling_t, new_rotation_r)
 
@@ -582,3 +707,222 @@ class GaussianModel:
         self.denom[update_filter] += 1
         if self.gaussian_dim == 4:
             self.t_gradient_accum[update_filter] += avg_t_grad[update_filter]
+        
+    def post_quant(self, param, prune=False):
+        max_val = torch.amax(param)
+        min_val = torch.amin(param)
+        param = (param - min_val)/(max_val - min_val)
+        quant = torch.round(param * 255.0) / 255.0
+        out = (max_val - min_val)*quant + min_val
+        if prune:
+            quant = quant*(torch.abs(out) > 0.1)
+            out = out*(torch.abs(out) > 0.1)
+        return torch.nn.Parameter(out), quant
+    
+    def huffman_encode(self, param):
+        input_code_list = param.view(-1).tolist()
+        unique, counts = np.unique(input_code_list, return_counts=True)
+        num_freq = dict(zip(unique, counts))
+
+        codec = HuffmanCodec.from_data(input_code_list)
+
+        sym_bit_dict = {}
+        for k, v in codec.get_code_table().items():
+            sym_bit_dict[k] = v[0]
+        total_bits = 0
+        for num, freq in num_freq.items():
+            total_bits += freq * sym_bit_dict[num]
+        total_mb = total_bits/8/10**6
+        return total_mb
+    
+    def vector_quantization(self, training_args, finetuning_lr_scale=0.1):
+        prune_mask = (self.get_opacity <= 0.05).squeeze()
+        self.prune_points(prune_mask)
+        
+        codebook_params = []
+        
+        other_params = [
+            {'params': [self._xyz], 'lr': training_args.position_lr_final * self.spatial_lr_scale * finetuning_lr_scale, "name": "xyz"},
+            {'params': [self._opacity], 'lr': training_args.opacity_lr * finetuning_lr_scale, "name": "opacity"},
+            {'params': [self._t], 'lr': training_args.position_t_lr_init * self.spatial_lr_scale * finetuning_lr_scale, "name": "t"},
+            {'params': [self._scaling_t], 'lr': training_args.scaling_t_lr * finetuning_lr_scale, "name": "scaling_t"}
+        ]
+        
+        if self.vq_attributes:
+            
+            if '_features_rest' in self.vq_attributes:
+                self.rvq_size_features_rest = 256
+                self.rvq_num_features_rest = 8
+                self.rvq_iter_features_rest = 0 # 2048
+                self.rvq_bit_features_rest = math.log2(self.rvq_size_features_rest)
+                rest_features_rest_params = self._features_rest.flatten(1)
+                self.vq_features_rest_model = ResidualVQ(dim = rest_features_rest_params.shape[1], 
+                                                         codebook_size=self.rvq_size_features_rest, num_quantizers=self.rvq_num_features_rest, 
+                        commitment_weight = 0., kmeans_init = True, kmeans_iters = 1, ema_update = False, 
+                        learnable_codebook=True, 
+                        in_place_codebook_optimizer=lambda *args, **kwargs: torch.optim.Adam(*args, **kwargs, lr=0.0001)).cuda()
+                for _ in tqdm(range(self.rvq_iter_features_rest - 1)):
+                    _, _, _ = self.vq_features_rest_model(rest_features_rest_params.unsqueeze(0).detach())
+                _, self.rvq_indices_features_rest, _ = self.vq_features_rest_model(rest_features_rest_params.unsqueeze(0))
+                codebook_params.append({'params': [p for p in self.vq_features_rest_model.parameters()], 'lr': training_args.feature_lr / 20.0 * finetuning_lr_scale, "name": "vq_features_rest"})
+            else:
+                other_params.append({'params': [self._features_rest], 'lr': training_args.feature_lr / 20.0 * finetuning_lr_scale, "name": "f_rest"},)
+
+            if '_features_dc' in self.vq_attributes:
+                self.rvq_size_features_dc = 64
+                self.rvq_num_features_dc = 6
+                self.rvq_iter_features_dc = 0 # 1024
+                self.rvq_bit_features_dc = math.log2(self.rvq_size_features_dc)
+                base_features_dc_params = self._features_dc
+                self.vq_features_dc_model = ResidualVQ(dim = 3, codebook_size=self.rvq_size_features_dc, num_quantizers=self.rvq_num_features_dc, 
+                        commitment_weight = 0., kmeans_init = True, kmeans_iters = 1, ema_update = False, 
+                        learnable_codebook=True, 
+                        in_place_codebook_optimizer=lambda *args, **kwargs: torch.optim.Adam(*args, **kwargs, lr=0.0001)).cuda()
+                for _ in tqdm(range(self.rvq_iter_features_dc - 1)):
+                    _, _, _ = self.vq_features_dc_model(base_features_dc_params.squeeze(1).unsqueeze(0))
+                _, self.rvq_indices_features_dc, _ = self.vq_features_dc_model(base_features_dc_params.squeeze(1).unsqueeze(0))
+                codebook_params.append({'params': [p for p in self.vq_features_dc_model.parameters()], 'lr': training_args.feature_lr * finetuning_lr_scale, "name": "vq_features_dc"})
+            else:
+                other_params.append({'params': [self._features_dc], 'lr': training_args.feature_lr * finetuning_lr_scale, "name": "f_dc"})
+            
+            if '_scaling' in self.vq_attributes:
+                self.rvq_size_scaling = 64
+                self.rvq_num_scaling = 6
+                self.rvq_iter_scaling = 0 # 512
+                self.rvq_bit_scaling = math.log2(self.rvq_size_scaling)
+                scaling_params = self._scaling
+                self.vq_scaling_model = ResidualVQ(dim = 3, codebook_size = self.rvq_size_scaling, num_quantizers = self.rvq_num_scaling, commitment_weight = 0., 
+                                    kmeans_init = True, kmeans_iters = 1, ema_update = False, 
+                                    learnable_codebook=True, in_place_codebook_optimizer=lambda *args, **kwargs: torch.optim.Adam(*args, **kwargs, lr=0.0004)).cuda()
+                
+                for _ in tqdm(range(self.rvq_iter_scaling - 1)):
+                    _, _, _ = self.vq_scaling_model(scaling_params.unsqueeze(0))
+                _, self.rvq_indices_scaling, _ = self.vq_scaling_model(scaling_params.unsqueeze(0)) # 1, N, 6
+                codebook_params.append({'params': [p for p in self.vq_scaling_model.parameters()], 'lr': training_args.scaling_lr * finetuning_lr_scale, "name": "vq_scaling"})
+            else:
+                other_params.append({'params': [self._scaling], 'lr': training_args.scaling_lr * finetuning_lr_scale, "name": "scaling"})
+
+            if '_rotation' in self.vq_attributes:
+                self.rvq_size_rotation = 64
+                self.rvq_num_rotation = 6
+                self.rvq_iter_rotation = 0 # 1024
+                self.rvq_bit_rotation = math.log2(self.rvq_size_rotation)
+                rotation_params = torch.cat([self.get_rotation, self.get_rotation_r], dim=0)
+                self.vq_rotation_model = ResidualVQ(dim = 4, codebook_size=self.rvq_size_rotation, num_quantizers=self.rvq_num_rotation, 
+                                commitment_weight = 0., kmeans_init = True, kmeans_iters = 1, ema_update = False, 
+                                learnable_codebook=True, 
+                                in_place_codebook_optimizer=lambda *args, **kwargs: torch.optim.Adam(*args, **kwargs, lr=0.0008)).cuda()
+                for _ in tqdm(range(self.rvq_iter_rotation - 1)):
+                    _, _, _ = self.vq_rotation_model(rotation_params.unsqueeze(0))
+                _, rvq_indices_rotation, _ = self.vq_rotation_model(rotation_params.unsqueeze(0))
+                self.rvq_indices_rotation, self.rvq_indices_rotation_r = rvq_indices_rotation.split(self._xyz.shape[0], dim=1)
+                codebook_params.append({'params': [p for p in self.vq_rotation_model.parameters()], 'lr': training_args.rotation_lr * finetuning_lr_scale, "name": "vq_rotation"})
+            else:
+                other_params.append({'params': [self._rotation], 'lr': training_args.scaling_lr * finetuning_lr_scale, "name": "scaling"})
+                other_params.append({'params': [self._rotation_r], 'lr': training_args.rotation_lr * finetuning_lr_scale, "name": "rotation_r"})
+            
+            self.indexed = True
+        if codebook_params:
+            self.optimizer_codebook = torch.optim.Adam(codebook_params, lr=0.0, eps=1e-15)
+        else:
+            self.optimizer_codebook = None
+        self.optimizer_others = torch.optim.Adam(other_params, lr=0.0, eps=1e-15)
+        
+    def fake_quantization(self):
+        if self.qa_attributes:
+            if '_scaling' in self.qa_attributes:
+                self.scaling_qa = torch.ao.quantization.FakeQuantize(
+                    dtype=torch.qint8
+                ).cuda()
+                # self.scaling_qa = FakeQuantizationHalf.apply
+                
+            if '_rotation' in self.qa_attributes:
+                self.rotation_qa = torch.ao.quantization.FakeQuantize(
+                    dtype=torch.qint8
+                ).cuda()
+                # self.rotation_qa = FakeQuantizationHalf.apply
+                
+            if '_xyz' in self.qa_attributes:
+                self.position_qa = FakeQuantizationHalf.apply
+                
+            if '_opacity' in self.qa_attributes:
+                self.opacity_qa = torch.ao.quantization.FakeQuantize(
+                    dtype=torch.qint8
+                ).cuda()
+                
+            self.quantization = True
+    
+    def compute_storage(self, encode=False):
+        '''
+        Adapted from https://github.com/maincold2/Compact-3DGS/blob/main/scene/gaussian_model.py#L558
+        '''
+        if self.quantization and '_xyz' in self.qa_attributes:
+            pos_precision = 16
+        else:
+            pos_precision = 32
+            
+        if self.quantization and '_opacity' in self.qa_attributes:
+            opa_precision = 8
+        else:
+            opa_precision = 32
+            
+        if self.quantization and '_scaling' in self.qa_attributes:
+            scaling_precision = 8
+        else:
+            scaling_precision = 32
+        
+        if self.quantization and '_rotation' in self.qa_attributes:
+            rotation_precision = 8
+        else:
+            rotation_precision = 32
+            
+        if self.quantization and '_features_dc' in self.qa_attributes:
+            color_precision = 8
+        else:
+            color_precision = 32
+        
+        position_mb = self._xyz.shape[0]*4*pos_precision/8/10**6
+        
+        if self.quantization and '_opacity' in self.qa_attributes and encode:
+            opacity_q = torch.quantize_per_tensor(
+                    self.opacity_activation(self._opacity).detach(),
+                    scale=self.opacity_qa.scale,
+                    zero_point=self.opacity_qa.zero_point,
+                    dtype=self.opacity_qa.dtype,
+            ).int_repr()
+            opacity_mb = self.huffman_encode(opacity_q)
+        else:
+            opacity_mb = self._xyz.shape[0]*opa_precision/8/10**6
+                
+        if self.indexed and '_scaling' in self.vq_attributes:
+            scale_indices_mb = self.huffman_encode(self.rvq_indices_scaling) if encode else self._xyz.shape[0]*self.rvq_bit_scaling*self.rvq_num_scaling/8/10**6
+            scale_codebook_mb = self.huffman_encode(self.post_quant(self.vq_scaling_model.codebooks.view(-1, self.vq_scaling_model.codebooks.shape[-1]))[1]) if self.quantization and '_scaling' in self.qa_attributes and encode else 2**self.rvq_bit_scaling*self.rvq_num_scaling*4*scaling_precision/8/10**6
+            scale_mb = scale_indices_mb + scale_codebook_mb
+        else:
+            scale_mb = self._xyz.shape[0]*4*scaling_precision/8/10**6
+            
+        if self.indexed and '_rotation' in self.vq_attributes:
+            rotation_indices_mb = 2 * self.huffman_encode(self.rvq_indices_rotation) if encode else 2 * self._xyz.shape[0]*self.rvq_bit_rotation*self.rvq_num_rotation/8/10**6
+            rotation_codebook_mb = self.huffman_encode(self.post_quant(self.vq_rotation_model.codebooks.view(-1, self.vq_rotation_model.codebooks.shape[-1]))[1]) if self.quantization and '_scaling' in self.qa_attributes and encode else 2**self.rvq_bit_rotation*self.rvq_num_rotation*8*rotation_precision/8/10**6
+            rotation_mb = rotation_indices_mb + rotation_codebook_mb
+        else:
+            rotation_mb = self._xyz.shape[0]*8*rotation_precision/8/10**6
+        
+        if self.indexed and '_features_dc' in self.vq_attributes:
+            dc_indices_mb = self.huffman_encode(self.rvq_indices_features_dc) if encode else 2 * self._xyz.shape[0]*self.rvq_bit_features_dc*self.rvq_num_features_dc/8/10**6
+            rest_indices_mb = self.huffman_encode(self.rvq_indices_features_dc) if encode else 2 * self._xyz.shape[0]*self.rvq_bit_features_dc*self.rvq_num_features_dc/8/10**6
+            dc_codebook_mb = self.huffman_encode(self.post_quant(self.vq_features_dc_model.codebooks.view(-1, self.vq_features_dc_model.codebooks.shape[-1]))[1]) if self.quantization and '_features_dc' in self.qa_attributes and encode else 2**self.rvq_bit_features_dc*self.rvq_num_features_dc*8*color_precision/8/10**6
+            rest_codebook_mb = self.huffman_encode(self.post_quant(self.vq_features_rest_model.codebooks.view(-1, self.vq_features_rest_model.codebooks.shape[-1]))[1]) if self.quantization and '_features_rest' in self.qa_attributes and encode else 2**self.rvq_bit_features_rest*self.rvq_num_features_rest*8*color_precision/8/10**6
+            color_mb = dc_indices_mb + rest_indices_mb + dc_codebook_mb + rest_codebook_mb
+        else:
+            color_mb = 0
+            color_mb += self._xyz.shape[0]*3*32/8/10**6
+            color_mb += self._xyz.shape[0]*3*(self.get_max_sh_channels-1)*32/8/10**6
+        sum_mb = position_mb+opacity_mb+scale_mb+rotation_mb+color_mb
+        
+        mb_str = "Storage\nposition: "+str(position_mb)+"\nscale: "+str(scale_mb)+"\nrotation: "+str(rotation_mb)+"\nopacity: "+str(opacity_mb)
+        mb_str = mb_str + "\ncolor: "+str(color_mb)
+        mb_str = mb_str + "\ntotal: "+str(sum_mb)+" MB"
+            
+        torch.cuda.empty_cache()
+        return mb_str

@@ -69,3 +69,11 @@ def msssim(rgb, gts):
     # assert (rgb.max() <= 1.05 and rgb.min() >= -0.05)
     # assert (gts.max() <= 1.05 and gts.min() >= -0.05)
     return ms_ssim(rgb, gts).item()
+
+def tv_loss(depth):
+    c, h, w = depth.shape[0], depth.shape[1], depth.shape[2]
+    count_h = c * (h - 1) * w
+    count_w = c * h * (w - 1)
+    h_tv = torch.square(depth[..., 1:, :] - depth[..., :h-1, :]).sum()
+    w_tv = torch.square(depth[..., :, 1:] - depth[..., :, :w-1]).sum()
+    return 2 * (h_tv / count_h + w_tv / count_w)

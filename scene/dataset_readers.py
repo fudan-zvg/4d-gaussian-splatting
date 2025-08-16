@@ -27,6 +27,7 @@ import torch
 from utils.general_utils import fps
 from multiprocessing.pool import ThreadPool
 import imagesize
+import natsort
 
 class CameraInfo(NamedTuple):
     uid: int
@@ -45,6 +46,9 @@ class CameraInfo(NamedTuple):
     fl_y: float = -1.0
     cx: float = -1.0
     cy: float = -1.0
+    sky_mask: np.array = None
+    pointcloud_camera: np.array = None
+
 
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
@@ -115,31 +119,61 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
     sys.stdout.write('\n')
     return cam_infos
 
+# def fetchPly(path):
+#     plydata = PlyData.read(path)
+#     vertices = plydata['vertex']
+#     positions = np.vstack([vertices['x'], vertices['y'], vertices['z']]).T
+#     colors = np.vstack([vertices['red'], vertices['green'], vertices['blue']]).T / 255.0
+#     if 'nx' in vertices:
+#         normals = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T
+#     else:
+#         normals = np.zeros_like(positions)
+#     if 'time' in vertices:
+#         timestamp = vertices['time'][:, None]
+#     else:
+#         timestamp = None
+#     return BasicPointCloud(points=positions, colors=colors, normals=normals, time=timestamp)
+
+# def storePly(path, xyz, rgb):
+#     # Define the dtype for the structured array
+#     dtype = [('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
+#             ('nx', 'f4'), ('ny', 'f4'), ('nz', 'f4'),
+#             ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')]
+    
+#     normals = np.zeros_like(xyz)
+
+#     elements = np.empty(xyz.shape[0], dtype=dtype)
+#     attributes = np.concatenate((xyz, normals, rgb), axis=1)
+#     elements[:] = list(map(tuple, attributes))
+
+#     # Create the PlyData object and write to file
+#     vertex_element = PlyElement.describe(elements, 'vertex')
+#     ply_data = PlyData([vertex_element])
+#     ply_data.write(path)
+
 def fetchPly(path):
     plydata = PlyData.read(path)
     vertices = plydata['vertex']
     positions = np.vstack([vertices['x'], vertices['y'], vertices['z']]).T
+    if 't' in vertices:
+        times = np.vstack([vertices['t']]).T
+    else:
+        times = None
     colors = np.vstack([vertices['red'], vertices['green'], vertices['blue']]).T / 255.0
-    if 'nx' in vertices:
-        normals = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T
-    else:
-        normals = np.zeros_like(positions)
-    if 'time' in vertices:
-        timestamp = vertices['time'][:, None]
-    else:
-        timestamp = None
-    return BasicPointCloud(points=positions, colors=colors, normals=normals, time=timestamp)
+    normals = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T
+    return BasicPointCloud(points=positions, colors=colors, normals=normals, time=times)
 
-def storePly(path, xyz, rgb):
+def storePly(path, xyzt, rgb):
     # Define the dtype for the structured array
-    dtype = [('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
+    dtype = [('x', 'f4'), ('y', 'f4'), ('z', 'f4'),('t','f4'),
             ('nx', 'f4'), ('ny', 'f4'), ('nz', 'f4'),
             ('red', 'u1'), ('green', 'u1'), ('blue', 'u1')]
     
+    xyz = xyzt[:, :3]
     normals = np.zeros_like(xyz)
 
-    elements = np.empty(xyz.shape[0], dtype=dtype)
-    attributes = np.concatenate((xyz, normals, rgb), axis=1)
+    elements = np.empty(xyzt.shape[0], dtype=dtype)
+    attributes = np.concatenate((xyzt, normals, rgb), axis=1)
     elements[:] = list(map(tuple, attributes))
 
     # Create the PlyData object and write to file
@@ -390,7 +424,169 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png", num_pt
                            ply_path=ply_path)
     return scene_info
 
+
+def readColmapCamerasTechnicolor(cam_extrinsics, cam_intrinsics, images_folder, startime=0, duration=50, dataloader=False, real_fov=False):
+
+    cam_infos = []
+    totalcamname = []
+    for idx, key in enumerate(cam_extrinsics): # first is cam20_ so we strictly sort by camera name
+        extr = cam_extrinsics[key]
+        intr = cam_intrinsics[extr.camera_id]
+        totalcamname.append(extr.name)
+    
+    sortedtotalcamelist =  natsort.natsorted(totalcamname)
+    sortednamedict = {}
+    for i in  range(len(sortedtotalcamelist)):
+        sortednamedict[sortedtotalcamelist[i]] = i # map each cam with a number
+
+    for idx, key in enumerate(cam_extrinsics): # first is cam20_ so we strictly sort by camera name
+        sys.stdout.write('\r')
+        # the exact output you're looking for:
+        sys.stdout.write("Reading camera {}/{}".format(idx+1, len(cam_extrinsics)))
+        sys.stdout.flush()
+
+        extr = cam_extrinsics[key]
+        intr = cam_intrinsics[extr.camera_id]
+        height = intr.height
+        width = intr.width
+
+        uid = intr.id
+        R = np.transpose(qvec2rotmat(extr.qvec))
+        T = np.array(extr.tvec)
+
+        if intr.model=="SIMPLE_PINHOLE":
+            focal_length_x = intr.params[0]
+            FovY = focal2fov(focal_length_x, height)
+            FovX = focal2fov(focal_length_x, width)
+        elif intr.model=="PINHOLE":
+            focal_length_x = intr.params[0]
+            focal_length_y = intr.params[1]
+            FovY = focal2fov(focal_length_y, height)
+            FovX = focal2fov(focal_length_x, width)
+        else:
+            assert False, "Colmap camera model not handled: only undistorted datasets (PINHOLE or SIMPLE_PINHOLE cameras) supported!"
+        if not real_fov:
+            FovY = FovX = -1.0
+
+        for j in range(startime, startime+int(duration)):
+            image_path = os.path.join(images_folder, os.path.basename(extr.name))
+            image_name = os.path.basename(image_path).split(".")[0]
+            image_path = image_path.replace("colmap_"+str(startime), "colmap_{}".format(j), 1)
+
+            K = np.eye(3)
+            K[0, 0] = focal_length_x #* 0.5
+            K[0, 2] = intr.params[2] #* 0.5 
+            K[1, 1] = focal_length_y #* 0.5
+            K[1, 2] = intr.params[3] #* 0.5
+            
+            assert os.path.exists(image_path), "Image {} does not exist!".format(image_path)
+            
+            if not dataloader:
+                image = Image.open(image_path)
+            else:
+                image = np.empty(0)
+
+            cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image, depth=None,
+                        image_path=image_path, image_name=image_name, width=width, height=height,
+                        timestamp=(j-startime)/duration, # 10s
+                        fl_x=focal_length_x, fl_y=focal_length_y, cx=intr.params[2], cy=intr.params[3])
+            cam_infos.append(cam_info)
+    sys.stdout.write('\n')
+    return cam_infos
+
+# def readNerfSyntheticInfo(path, white_background, eval, extension=".png", 
+#                           num_pts=100_000, time_duration=None, num_extra_pts=0, frame_ratio=1, dataloader=False):
+
+def readColmapSceneInfoTechnicolor(path, white_background, eval, 
+                                   num_pts=100_000, time_duration=50, num_extra_pts=0, frame_ratio=1, dataloader=False,
+                                   real_fov=False):
+    time_duration = int(time_duration)
+    try:
+        cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.bin")
+        cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.bin")
+        cam_extrinsics = read_extrinsics_binary(cameras_extrinsic_file)
+        cam_intrinsics = read_intrinsics_binary(cameras_intrinsic_file)
+    except:
+        cameras_extrinsic_file = os.path.join(path, "sparse/0", "images.txt")
+        cameras_intrinsic_file = os.path.join(path, "sparse/0", "cameras.txt")
+        cam_extrinsics = read_extrinsics_text(cameras_extrinsic_file)
+        cam_intrinsics = read_intrinsics_text(cameras_intrinsic_file)
+
+    parentdir = os.path.dirname(path)
+
+    starttime = os.path.basename(path).split("_")[1] # colmap_0, 
+    assert starttime.isdigit(), "Colmap folder name must be colmap_<startime>_<duration>!"
+    starttime = int(starttime)
+    
+    cam_infos_unsorted = readColmapCamerasTechnicolor(cam_extrinsics=cam_extrinsics, cam_intrinsics=cam_intrinsics, images_folder=os.path.join(path, 'images'), startime=starttime, duration=time_duration, dataloader=dataloader, real_fov=real_fov)
+    cam_infos = sorted(cam_infos_unsorted.copy(), key = lambda x : x.image_name)
+     
+    # for cam in cam_infos:
+    #     print(cam.image_name)
+    # for cam_info in cam_infos:
+    #     print(cam_info.uid, cam_info.R, cam_info.T, cam_info.FovY, cam_info.image_name)
+
+    if eval:
+        train_cam_infos = [_ for _ in cam_infos if "cam10" not in _.image_name]
+        test_cam_infos = [_ for _ in cam_infos if "cam10" in _.image_name]
+        if len(test_cam_infos) > 0:
+            uniquecheck = []
+            for cam_info in test_cam_infos:
+                if cam_info.image_name not in uniquecheck:
+                    uniquecheck.append(cam_info.image_name)
+            assert len(uniquecheck) == 1 
+            
+            sanitycheck = []
+            for cam_info in train_cam_infos:
+                if cam_info.image_name not in sanitycheck:
+                    sanitycheck.append(cam_info.image_name)
+            for testname in uniquecheck:
+                assert testname not in sanitycheck
+        else:
+            first_cam = cam_infos[0].image_name
+            print("do custom loader training, select first cam as test frame: ", first_cam)
+            cam_infos = natsort.natsorted(cam_infos_unsorted.copy(), key = lambda x : x.image_name)
+            train_cam_infos = [_ for _ in cam_infos if first_cam not in _.image_name]
+            test_cam_infos = [_ for _ in cam_infos if first_cam in _.image_name]
+    else:
+        train_cam_infos = cam_infos
+        test_cam_infos = cam_infos[:4]
+
+    nerf_normalization = getNerfppNorm(train_cam_infos)
+
+    ply_path = os.path.join(path, "sparse/0/points3D.ply")
+    bin_path = os.path.join(path, "sparse/0/points3D.bin")
+    txt_path = os.path.join(path, "sparse/0/points3D.txt")
+    totalply_path = os.path.join(path, "sparse/0/points3D_total" + str(time_duration) + ".ply")
+    
+    if not os.path.exists(totalply_path):
+        print("Converting point3d.bin to .ply, will happen only the first time you open the scene.")
+        totalxyz = []
+        totalrgb = []
+        totaltime = []
+        for i in range(starttime, starttime + int(time_duration)):
+            thisbin_path = os.path.join(path, "sparse/0/points3D.bin").replace("colmap_"+ str(starttime), "colmap_" + str(i), 1)
+            xyz, rgb, _ = read_points3D_binary(thisbin_path)
+            totalxyz.append(xyz)
+            totalrgb.append(rgb)
+            totaltime.append(np.ones((xyz.shape[0], 1)) * (i-starttime) / time_duration)
+        xyz = np.concatenate(totalxyz, axis=0)
+        rgb = np.concatenate(totalrgb, axis=0)
+        totaltime = np.concatenate(totaltime, axis=0)
+        assert xyz.shape[0] == rgb.shape[0]  
+        xyzt =np.concatenate( (xyz, totaltime), axis=1)     
+        storePly(totalply_path, xyzt, rgb)
+
+    pcd = fetchPly(totalply_path)
+    scene_info = SceneInfo(point_cloud=pcd,
+                           train_cameras=train_cam_infos,
+                           test_cameras=test_cam_infos,
+                           nerf_normalization=nerf_normalization,
+                           ply_path=totalply_path)
+    return scene_info
+
 sceneLoadTypeCallbacks = {
     "Colmap": readColmapSceneInfo,
-    "Blender" : readNerfSyntheticInfo
+    "Blender" : readNerfSyntheticInfo,
+    "Technicolor": readColmapSceneInfoTechnicolor,
 }

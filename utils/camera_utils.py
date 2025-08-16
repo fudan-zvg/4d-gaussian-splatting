@@ -14,6 +14,9 @@ import numpy as np
 from utils.general_utils import PILtoTorch
 from utils.graphics_utils import fov2focal
 
+import torch
+import cv2
+
 WARNED = False
 
 def loadCam(args, id, cam_info, resolution_scale):
@@ -59,13 +62,55 @@ def loadCam(args, id, cam_info, resolution_scale):
     else:
         depth = None
 
+    if cam_info.sky_mask is not None:
+        if cam_info.sky_mask.shape[:2] != resolution[::-1]:
+            sky_mask = cv2.resize(cam_info.sky_mask, resolution)
+        else:
+            sky_mask = cam_info.sky_mask
+        if len(sky_mask.shape) == 2:
+            sky_mask = sky_mask[..., None]
+        sky_mask = torch.from_numpy(sky_mask).float().permute(2, 0, 1)
+    else:
+        sky_mask = None
+
+    if cam_info.pointcloud_camera is not None:
+        h, w = gt_image.shape[1:]
+        K = np.eye(3)
+        if cam_info.cx:
+            K[0, 0] = fl_x
+            K[1, 1] = fl_y
+            K[0, 2] = cx
+            K[1, 2] = cy
+        else:
+            K[0, 0] = fov2focal(cam_info.FovX, w)
+            K[1, 1] = fov2focal(cam_info.FovY, h)
+            K[0, 2] = w / 2
+            K[1, 2] = h / 2
+        pts_depth = np.zeros([1, h, w])
+        point_camera = cam_info.pointcloud_camera
+        uvz = point_camera[point_camera[:, 2] > 0]
+        uvz = uvz @ K.T
+        uvz[:, :2] /= uvz[:, 2:]
+        uvz = uvz[uvz[:, 1] >= 0]
+        uvz = uvz[uvz[:, 1] < h]
+        uvz = uvz[uvz[:, 0] >= 0]
+        uvz = uvz[uvz[:, 0] < w]
+        uv = uvz[:, :2]
+        uv = uv.astype(int)
+        # TODO: may need to consider overlap
+        pts_depth[0, uv[:, 1], uv[:, 0]] = uvz[:, 2]
+        pts_depth = torch.from_numpy(pts_depth).float()
+    else:
+        pts_depth = None
+
     return Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
                   FoVx=cam_info.FovX, FoVy=cam_info.FovY, 
                   image=gt_image, gt_alpha_mask=loaded_mask,
                   image_name=cam_info.image_name, uid=id, data_device=args.data_device, 
                   timestamp=cam_info.timestamp,
                   cx=cx, cy=cy, fl_x=fl_x, fl_y=fl_y, depth=depth, resolution=resolution, image_path=cam_info.image_path,
-                  meta_only=args.dataloader
+                  meta_only=args.dataloader,
+                  pts_depth=pts_depth, sky_mask=sky_mask,
                   )
 
 def cameraList_from_camInfos(cam_infos, resolution_scale, args):

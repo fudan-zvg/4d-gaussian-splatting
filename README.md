@@ -1,99 +1,71 @@
-# Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting
-### [Project page](https://fudan-zvg.github.io/4d-gaussian-splatting/) | [Paper](https://arxiv.org/abs/2310.10642)
-> [**Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting**](https://arxiv.org/abs/2310.10642),  
-> Zeyu Yang, Hongye Yang, Zijie Pan, [Li Zhang](https://lzrobots.github.io)  
-> **Fudan University**  
-> **ICLR 2024**
+# 4D Gaussian Splatting Extension
 
-> [**4D Gaussian Splatting: Modeling Dynamic Scenes with Native 4D Primitives**](https://arxiv.org/abs/2412.20720),  
-> Zeyu Yang, Zijie Pan, Xiatian Zhu, [Li Zhang](https://lzrobots.github.io), Jianfeng Feng, Yu-Gang Jiang, Philip H.S. Torr  
-> **Fudan University, University of Surrey, University of Oxford**  
-> **Arxiv preprint**
+This repository contains the official implementation of the [extended paper](https://arxiv.org/abs/2412.20720). 
 
+## Installation
 
-**This repository is the official implementation of "Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting".** In this paper, we propose coherent integrated modeling of the space and time dimensions for dynamic scenes by formulating unbiased 4D Gaussian primitives along with a dedicated rendering pipeline.
-
-
-## 🛠️ Pipeline
-<div align="center">
-  <img src="assets/pipeline.png"/>
-</div><br/>
-
-
-## Get started
-
-### Environment
-
-The hardware and software requirements are the same as those of the [3D Gaussian Splatting](https://github.com/graphdeco-inria/gaussian-splatting), which this code is built upon. To setup the environment, please run the following command:
+There are some additional packages required to running the following code after setting up environment per the main branch instruction. They can be installed with:
 
 ```shell
-git clone https://github.com/fudan-zvg/4d-gaussian-splatting
-cd 4d-gaussian-splatting
-conda env create --file environment.yml
-conda activate 4dgs
+pip install -r requirements_extension.txt
 ```
 
-### Data preparation
+## Technicolor dataset
 
-**DyNeRF dataset:**
-
-Download the [Neural 3D Video dataset](https://github.com/facebookresearch/Neural_3D_Video) and extract each scene to `data/N3V`. After that, preprocess the raw video by executing:
+**Data preparation**
+Please obtain the [Technicolor Dataset](https://www.interdigital.com/data_sets/light-field-dataset) and place it in `data/technicolor`. Then you can preprocess it by running the following script:
 
 ```shell
-python scripts/n3v2blender.py data/N3V/$scene_name
+./scripts/technicolor_convertor.sh
 ```
 
-**DNeRF dataset:**
+**Running**
 
-The dataset can be downloaded from [drive](https://drive.google.com/file/d/19Na95wk0uikquivC7uKWVqllmTx-mBHt/view?usp=sharing) or [dropbox](https://www.dropbox.com/s/0bf6fl0ye2vz3vr/data.zip?dl=0). Then, unzip each scene into `data/dnerf`.
-
-
-### Running
-
-After the installation and data preparation, you can train the model by running:
+We provide configurations for each scene in `configs/technicolor`. You can train them with:
 
 ```shell
 python train.py --config $config_path
 ```
 
-## 🎥 Videos
+## Compression
 
-### 🎞️ Demo
+The post-training quantification is mainly supported via the following arguments:
 
-[![Demo Video](https://i3.ytimg.com/vi/3cXC9e4CujM/maxresdefault.jpg)](https://www.youtube.com/embed/3cXC9e4CujM)
+#### --vq_attributes
+Specify which attributes need to compress using vector quantization.
+#### --qa_attributes
+Specify which attributes to compress using precision reduction.
+#### --vq_finetune_iters
+Number of steps for quantization-aware fine-tuning after compression.
 
-### 🎞️ Dynamic novel view synthesis
-
-https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/5e163b88-4f70-4157-b9f5-8431b13c26b7
-
-### 🎞️ Bullet time
-
-https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/ac5bc3b2-dd17-446d-9ee6-6efcc871eb84
-
-### 🎞️ Free view synthesis from a teleporting camera
-
-https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/6bd0b57b-4857-4722-9851-61250a2521ab
-
-### 🎞️ Monocular dynamic scene reconstruction
-
-https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/2c79974c-1867-4ce6-848b-5d31679b6067
-
-
-## 📜 BibTex
-```bibtex
-@inproceedings{yang2023gs4d,
-  title={Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting},
-  author={Yang, Zeyu and Yang, Hongye and Pan, Zijie and Zhang, Li},
-  booktitle={International Conference on Learning Representations (ICLR)},
-  year={2024}
-}
+More fine-grained customization can be achieved by modifiying the function [here](scene/gaussian_model.py:L738). We provide a sample config file in `configs/dynerf/cut_roasted_beef_compact.yaml`, which can be directly use by: 
+```shell
+python train.py --config configs/dynerf/cut_roasted_beef_compact.yaml
+```
+Or resume from a pretrained checkpoint:
+```shell
+`python train.py --config configs/dynerf/cut_roasted_beef_compact.yaml --start_checkpoint $checkpoint_path
 ```
 
-```bibtex
-@article{yang20244dgs,
-    title={4D Gaussian Splatting: Modeling Dynamic Scenes with Native 4D Primitives},
-    author={Yang, Zeyu and Pan, Zijie and Zhu, Xiatian and Zhang, Li and Feng, Jianfeng and Jiang, Yu-Gang and Torr, Philip HS},
-    journal={arXiv preprint},
-    year={2024},
-}
+NOTE: Now the released code mainly aims to demonstrate the possibility and potential of compression for the academic community. It does not really provide interaface for saving / loading a compressed model.
+
+## Results on Waymo Open Dataset
+
+Sequences in Waymo Open Dataset (WOD) is serialized into TFRecords. To make them easier to be read, we need to first convert it to the KITTI format. Assuming the used TFRecords are placed under `$record_root`, you can convert them using the following script:
+
+```shell
+python scripts/waymo_convertor.py --root-path $record_root --out-dir $processed_path --workers $num_workers
 ```
+
+Then we need to extract sky mask for each scene. We provide the a simple [script](scripts/waymo_extract_sky_mask.py) for this process. Please follow [MMSegmentation installation guide](https://mmsegmentation.readthedocs.io/en/main/get_started.html) to set up the required environment.
+
+After that, you can train on the processed sequence using the sample config provided in `configs/waymo/0000.yaml`.
+
+## Acknowledgement
+
+We are sincerely thankful to the following open-source projects, from which we drew inspiration and adapted some codes in this branch:
+
+- [3DGS](https://github.com/graphdeco-inria/gaussian-splatting)
+- [MMDetection3D](https://github.com/open-mmlab/mmdetection3d)
+- [STG](https://github.com/oppo-us-research/SpacetimeGaussians)
+- [Compact3DGS](https://github.com/maincold2/Compact-3DGS)

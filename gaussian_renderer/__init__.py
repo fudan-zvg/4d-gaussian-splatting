@@ -16,13 +16,15 @@ from .diff_gaussian_rasterization import GaussianRasterizationSettings, Gaussian
 from scene.gaussian_model import GaussianModel
 from utils.sh_utils import eval_sh, eval_shfs_4d
 
-def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None):
+def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, scaling_modifier = 1.0, override_color = None,
+           time_shift=None):
     """
     Render the scene. 
     
     Background tensor (bg_color) must be on GPU!
     """
- 
+    if time_shift is not None:
+        viewpoint_camera.timestamp -= time_shift
     # Create zero tensor. We will use it to make pytorch return gradients of the 2D (screen-space) means
     screenspace_points = torch.zeros_like(pc.get_xyz, dtype=pc.get_xyz.dtype, requires_grad=True, device="cuda") + 0
     try:
@@ -77,7 +79,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             cov3D_precomp = pc.get_covariance(scaling_modifier)
         if pc.gaussian_dim == 4:
             marginal_t = pc.get_marginal_t(viewpoint_camera.timestamp)
-            # marginal_t = torch.clamp_max(marginal_t, 1.0) # NOTE: 这里乘完会大于1，绝对不行——marginal_t应该用个概率而非概率密度 暂时可以clamp一下，后期用积分 —— 2d 也用的clamp
             opacity = opacity * marginal_t
     else:
         scales = pc.get_scaling
@@ -159,26 +160,22 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         rotations_r = rotations_r,
         cov3D_precomp = cov3D_precomp)
     
-    if pipe.env_map_res:
+    
+    if pipe.env_map_res > 0:
+        rendered_image_before = rendered_image
         assert pc.env_map is not None
-        R = 60
-        rays_o, rays_d = viewpoint_camera.get_rays()
-        delta = ((rays_o*rays_d).sum(-1))**2 - (rays_d**2).sum(-1)*((rays_o**2).sum(-1)-R**2)
-        assert (delta > 0).all()
-        t_inter = -(rays_o*rays_d).sum(-1)+torch.sqrt(delta)/(rays_d**2).sum(-1)
-        xyz_inter = rays_o + rays_d * t_inter.unsqueeze(-1)
-        tu = torch.atan2(xyz_inter[...,1:2], xyz_inter[...,0:1]) / (2 * torch.pi) + 0.5 # theta
-        tv = torch.acos(xyz_inter[...,2:3] / R) / torch.pi
-        texcoord = torch.cat([tu, tv], dim=-1) * 2 - 1
-        bg_color_from_envmap = F.grid_sample(pc.env_map[None], texcoord[None])[0] # 3,H,W
-        # mask2 = (0 < xyz_inter[...,0]) & (xyz_inter[...,1] > 0) # & (xyz_inter[...,2] > -19)
-        rendered_image = rendered_image + (1 - alpha) * bg_color_from_envmap # * mask2[None]
+        rays_d = viewpoint_camera.get_world_directions().permute(1, 2, 0)
+        bg_color_from_envmap = pc.env_map.query_cube(rays_d).permute(2, 0, 1)
+        rendered_image = rendered_image + (1 - alpha) * bg_color_from_envmap
     
     if pipe.compute_cov3D_python and pc.gaussian_dim == 4:
         radii_all = radii.new_zeros(mask.shape)
         radii_all[mask] = radii
     else:
         radii_all = radii
+
+    if time_shift is not None:
+        viewpoint_camera.timestamp += time_shift
 
     # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
     # They will be excluded from value updates used in the splitting criteria.

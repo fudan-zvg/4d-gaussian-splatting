@@ -19,6 +19,7 @@ from scene.gaussian_model import GaussianModel
 from arguments import ModelParams
 from utils.camera_utils import cameraList_from_camInfos, camera_to_JSON
 from utils.data_utils import CameraDataset
+from scene.waymo_loader import readWaymoInfo
 
 class Scene:
 
@@ -42,12 +43,27 @@ class Scene:
 
         self.train_cameras = {}
         self.test_cameras = {}
-
-        if os.path.exists(os.path.join(args.source_path, "sparse")):
+        sceneLoadTypeCallbacks['Waymo'] = readWaymoInfo
+        if 'waymo' in args.source_path.lower():
+            print("Found calib directory, assuming Waymo data set!")
+            scene_info = sceneLoadTypeCallbacks["Waymo"](args.source_path,
+                                                           args.eval, num_pts=num_pts,
+                                                           time_duration=time_duration,
+                                                           extension=args.extension,
+                                                        cam_num=args.cam_num,
+                                                        start_frame=args.start_frame,
+                                                        end_frame=args.end_frame,
+                                                         )
+        elif "technicolor" in args.source_path.lower():
+            scene_info = sceneLoadTypeCallbacks["Technicolor"](args.source_path, args.white_background, args.eval, 
+                                                               time_duration=time_duration[1], frame_ratio=args.frame_ratio, dataloader=args.dataloader,
+                                                               real_fov=args.args)
+        elif os.path.exists(os.path.join(args.source_path, "sparse")):
             scene_info = sceneLoadTypeCallbacks["Colmap"](args.source_path, args.images, args.eval, num_pts_ratio=num_pts_ratio)
         elif os.path.exists(os.path.join(args.source_path, "transforms_train.json")):
             print("Found transforms_train.json file, assuming Blender data set!")
-            scene_info = sceneLoadTypeCallbacks["Blender"](args.source_path, args.white_background, args.eval, num_pts=num_pts, time_duration=time_duration, extension=args.extension, num_extra_pts=args.num_extra_pts, frame_ratio=args.frame_ratio, dataloader=args.dataloader)
+            scene_info = sceneLoadTypeCallbacks["Blender"](args.source_path, args.white_background, args.eval, num_pts=num_pts, 
+                                                           time_duration=time_duration, extension=args.extension, num_extra_pts=args.num_extra_pts, frame_ratio=args.frame_ratio, dataloader=args.dataloader)
         else:
             assert False, "Could not recognize scene type!"
 
@@ -86,7 +102,7 @@ class Scene:
                                                             "iteration_" + str(self.loaded_iter),
                                                             "point_cloud.ply"))
             else:
-                self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent)
+                self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent, args.time_scale_factor)
 
     def save(self, iteration):
         torch.save((self.gaussians.capture(), iteration), self.model_path + "/chkpnt" + str(iteration) + ".pth")

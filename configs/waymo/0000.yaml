@@ -1,0 +1,69 @@
+gaussian_dim: 4
+num_pts_ratio: 1.0
+rot_4d: True
+force_sh_3d: True
+batch_size: 4
+exhaust_test: True
+
+ModelParams:
+  sh_degree: 3
+  source_path: "data/waymo/processed/0000"
+  model_path: "output/waymo/0000_clip1"
+  images: "images"
+  resolution: 2
+  white_background: False
+  data_device: "cuda"
+  eval: True
+  extension: ".jpg"
+  num_extra_pts: 0
+  loaded_pth: ""
+  frame_ratio: 1
+  dataloader: False
+  start_frame: 0
+  end_frame: 50
+  time_scale_factor: 1.0
+
+PipelineParams:
+  convert_SHs_python: False
+  compute_cov3D_python: True
+  debug: False
+  env_map_res: 512
+  env_optimize_until: 20000
+  env_optimize_from: 0
+  eval_shfs_4d: True
+
+OptimizationParams:
+  iterations: 30_000
+  position_lr_init: 0.00016
+  position_t_lr_init: -1.0
+  position_lr_final: 0.0000016
+  position_lr_delay_mult: 0.01
+  position_lr_max_steps: 30_000
+  feature_lr: 0.0025
+  opacity_lr: 0.05
+  scaling_lr: 0.005
+  rotation_lr: 0.001
+  percent_dense: 0.01
+  lambda_dssim: 0.2
+  thresh_opa_prune: 0.005
+  densification_interval: 100
+  opacity_reset_interval: 3000
+  densify_from_iter: 500
+  densify_until_iter: 15_000
+  densify_grad_threshold: 0.0002
+  densify_until_num_points: -1
+  final_prune_from_iter: -1
+  sh_increase_interval: 1000
+  lambda_opa_mask: 0.0
+  lambda_motion: 0.0
+
+  lambda_sky_l1_disparity: 0.1
+  lambda_inv_depth_smooth: 0.001
+  lambda_lidar: 0.1
+  lambda_rigid: 0.001
+  lambda_quant_reg: 0.1
+  warm_up: 5000
+  lambda_self_supervision: 0.5
+  scaling_t_lr: 0.002
+  split_t: False
+  opa_thresh_4d: 0.1
