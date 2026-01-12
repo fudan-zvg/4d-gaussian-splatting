@@ -278,7 +278,7 @@ __device__ void computeCov3D(const glm::vec3 scale, float mod, const glm::vec4 r
 
 __device__ void computeCov3D_conditional(const glm::vec3 scale, const float scale_t, float mod,
 		const glm::vec4 rot, const glm::vec4 rot_r, float* cov3D, float3& p_orig,
-		float t, const float timestamp, int idx, bool& mask, float& opacity)
+		float t, const float timestamp, int idx, bool& mask, float& opacity, const float prefilter_var)
 {
 	// Create scaling matrix
 	float dt=timestamp-t;
@@ -330,7 +330,7 @@ __device__ void computeCov3D_conditional(const glm::vec3 scale, const float scal
 	glm::mat4 M = S * R;
 	glm::mat4 Sigma = glm::transpose(M) * M;
 	float cov_t = Sigma[3][3];
-	float marginal_t = __expf(-0.5*dt*dt/cov_t);
+	float marginal_t = __expf(-0.5*dt*dt/((prefilter_var > 0.0) ? (prefilter_var + cov_t) : cov_t));
 	mask = marginal_t > 0.05;
 	if (!mask) return;
 	opacity*=marginal_t;;
@@ -366,6 +366,7 @@ __global__ void preprocessCUDA(int P, int D, int D_t, int M,
 	const float* shs,
 	bool* clamped,
 	const float* cov3D_precomp,
+	const float prefilter_var,
 	const float* colors_precomp,
 	const float* viewmatrix,
 	const float* projmatrix,
@@ -415,7 +416,8 @@ __global__ void preprocessCUDA(int P, int D, int D_t, int M,
 	{
 		bool time_mask=true;
 		computeCov3D_conditional(scales[idx], scales_t[idx], scale_modifier,
-			rotations[idx], rotations_r[idx], cov3Ds + idx * 6, p_orig, ts[idx], timestamp, idx, time_mask, opacity);
+			rotations[idx], rotations_r[idx], cov3Ds + idx * 6, p_orig, ts[idx], timestamp, idx, time_mask, opacity,
+			prefilter_var);
 		if (!time_mask) return;
 		cov3D = cov3Ds + idx * 6;
 		out_means3D[idx*3+0]=p_orig.x;
@@ -429,7 +431,7 @@ __global__ void preprocessCUDA(int P, int D, int D_t, int M,
 		if (gaussian_dim == 4){  // no rot_4d
             float dt = ts[idx]-timestamp;
             float sigma = scales_t[idx] * scale_modifier;
-		    float marginal_t = __expf(-0.5*dt*dt/sigma);
+		    float marginal_t = __expf(-0.5*dt*dt/((prefilter_var > 0.0) ? (prefilter_var + sigma) : sigma));
 		    if (marginal_t <= 0.05) return;
 		    opacity *= marginal_t;
 		}
@@ -670,6 +672,7 @@ void FORWARD::preprocess(int P, int D, int D_t, int M,
 	const float* shs,
 	bool* clamped,
 	const float* cov3D_precomp,
+	const float prefilter_var,
 	const float* colors_precomp,
 	const float* viewmatrix,
 	const float* projmatrix,
@@ -704,6 +707,7 @@ void FORWARD::preprocess(int P, int D, int D_t, int M,
 		shs,
 		clamped,
 		cov3D_precomp,
+		prefilter_var,
 		colors_precomp,
 		viewmatrix,
 		projmatrix,

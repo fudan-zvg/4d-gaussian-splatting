@@ -687,7 +687,7 @@ __device__ void computeCov3D(int idx, const glm::vec3 scale, float mod, const gl
 // Backward pass for the conversion of scale and rotation to a
 // 3D covariance matrix for each Gaussian.
 __device__ void computeCov3D_conditional(int idx, const glm::vec3 scale, const float scale_t, float mod,
-    const glm::vec4 rot, const glm::vec4 rot_r, const float t, const float timestamp, const float opacity, bool& mask,
+    const glm::vec4 rot, const glm::vec4 rot_r, const float prefilter_var, const float t, const float timestamp, const float opacity, bool& mask,
     const float* dL_dcov3Ds, const glm::vec3* dL_dmeans, float* dL_dopacity, float* dL_dts,
     glm::vec3* dL_dscales, float* dL_dscales_t,
     glm::vec4* dL_drots, glm::vec4* dL_drots_r)
@@ -743,7 +743,8 @@ __device__ void computeCov3D_conditional(int idx, const glm::vec3 scale, const f
     glm::mat4 Sigma = glm::transpose(M) * M;
 
 	float cov_t = Sigma[3][3];
-	float marginal_t = __expf(-0.5*dt*dt/cov_t);
+	float cov_t_prefiltered = ((prefilter_var > 0.0) ? (prefilter_var + cov_t) : cov_t);
+	float marginal_t = __expf(-0.5*dt*dt/cov_t_prefiltered);
 	mask = marginal_t > 0.05;
 	if (!mask) return;
 
@@ -767,8 +768,8 @@ __device__ void computeCov3D_conditional(int idx, const glm::vec3 scale, const f
     // from opacity
 	float dL_dmarginal_t = dL_dopacity[idx] * opacity;
 	dL_dopacity[idx] *= marginal_t;
-	float dmarginalt_dcovt = marginal_t * dt * dt / 2 / (cov_t * cov_t);
-	float dmarginalt_dt = marginal_t * dt / cov_t;
+	float dmarginalt_dcovt = marginal_t * dt * dt / 2 / (cov_t_prefiltered * cov_t_prefiltered);
+	float dmarginalt_dt = marginal_t * dt / cov_t_prefiltered;
     dL_dcovt += dmarginalt_dcovt * dL_dmarginal_t;
     float dL_dt = dL_dmarginal_t * dmarginalt_dt;
 
@@ -849,6 +850,7 @@ __global__ void preprocessCUDA(
 	const float* scales_t,
 	const glm::vec4* rotations,
 	const glm::vec4* rotations_r,
+	const float prefilter_var,
 	const float scale_modifier,
 	const float* proj,
 	const glm::vec3* campos,
@@ -907,13 +909,13 @@ __global__ void preprocessCUDA(
 		if (rot_4d){
             bool time_mask=true;
             computeCov3D_conditional(idx, scales[idx], scales_t[idx], scale_modifier,
-                rotations[idx], rotations_r[idx], ts[idx], timestamp, opacities[idx], time_mask,
+                rotations[idx], rotations_r[idx], prefilter_var, ts[idx], timestamp, opacities[idx], time_mask,
                 dL_dcov3D, dL_dmeans, dL_dopacity, dL_dts, dL_dscale, dL_dscale_t, dL_drot, dL_drot_r);
             if (!time_mask) return;
 		}else{
 			computeCov3D(idx, scales[idx], scale_modifier, rotations[idx], dL_dcov3D, dL_dscale, dL_drot);
 			if (gaussian_dim == 4){
-				// marginal opacity
+				// TODO: marginal opacity
 			}
 		}
 
@@ -1149,6 +1151,7 @@ void BACKWARD::preprocess(
 	const glm::vec4* rotations_r,
 	const float scale_modifier,
 	const float* cov3Ds,
+	const float prefilter_var,
 	const float* viewmatrix,
 	const float* projmatrix,
 	const float focal_x, float focal_y,
@@ -1205,6 +1208,7 @@ void BACKWARD::preprocess(
 		scales_t,
 		(glm::vec4*)rotations,
 		(glm::vec4*)rotations_r,
+		prefilter_var,
 		scale_modifier,
 		projmatrix,
 		campos,

@@ -69,6 +69,7 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
     rotations_r = None
     ts = None
     cov3D_precomp = None
+    prefilter_var = -1.0
     if pipe.compute_cov3D_python:
         if pc.rot_4d:
             cov3D_precomp, delta_mean = pc.get_current_covariance_and_mean_offset(scaling_modifier, viewpoint_camera.timestamp)
@@ -77,7 +78,6 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             cov3D_precomp = pc.get_covariance(scaling_modifier)
         if pc.gaussian_dim == 4:
             marginal_t = pc.get_marginal_t(viewpoint_camera.timestamp)
-            # marginal_t = torch.clamp_max(marginal_t, 1.0) # NOTE: 这里乘完会大于1，绝对不行——marginal_t应该用个概率而非概率密度 暂时可以clamp一下，后期用积分 —— 2d 也用的clamp
             opacity = opacity * marginal_t
     else:
         scales = pc.get_scaling
@@ -87,6 +87,8 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
             ts = pc.get_t
             if pc.rot_4d:
                 rotations_r = pc.get_rotation_r
+            if pc.prefilter_var > 0.0:
+                prefilter_var = pc.prefilter_var
 
     # If precomputed colors are provided, use them. Otherwise, if it is desired to precompute colors
     # from SHs in Python, do it. If not, then SH -> RGB conversion will be done by rasterizer.
@@ -157,7 +159,8 @@ def render(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch.Tensor, 
         scales_t = scales_t,
         rotations = rotations,
         rotations_r = rotations_r,
-        cov3D_precomp = cov3D_precomp)
+        cov3D_precomp = cov3D_precomp,
+        prefilter_var = prefilter_var)
     
     if pipe.env_map_res:
         assert pc.env_map is not None

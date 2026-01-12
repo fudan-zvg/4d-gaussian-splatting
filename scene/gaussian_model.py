@@ -60,7 +60,8 @@ class GaussianModel:
         self.rotation_activation = torch.nn.functional.normalize
 
 
-    def __init__(self, sh_degree : int, gaussian_dim : int = 3, time_duration: list = [-0.5, 0.5], rot_4d: bool = False, force_sh_3d: bool = False, sh_degree_t : int = 0):
+    def __init__(self, sh_degree : int, gaussian_dim : int = 3, time_duration: list = [-0.5, 0.5], rot_4d: bool = False, force_sh_3d: bool = False, sh_degree_t : int = 0,
+                 prefilter_var: float = -1.0):
         self.active_sh_degree = 0
         self.max_sh_degree = sh_degree  
         self._xyz = torch.empty(0)
@@ -90,6 +91,8 @@ class GaussianModel:
         
         self.active_sh_degree_t = 0
         self.max_sh_degree_t = sh_degree_t
+
+        self.prefilter_var = prefilter_var
         
         self.setup_functions()
 
@@ -234,6 +237,8 @@ class GaussianModel:
 
     def get_marginal_t(self, timestamp, scaling_modifier = 1): # Standard
         sigma = self.get_cov_t(scaling_modifier)
+        if self.prefilter_var > 0.0:
+            sigma += self.prefilter_var
         return torch.exp(-0.5*(self.get_t-timestamp)**2/sigma) # / torch.sqrt(2*torch.pi*sigma)
     
     def get_covariance(self, scaling_modifier = 1):

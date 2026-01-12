@@ -50,7 +50,7 @@ OptimizationParams:
   densify_from_iter: 500
   densify_until_iter: 15_000
   densify_grad_threshold: 0.0002
-  densify_grad_t_threshold: 0.0002 / 40 # 想办法用上
+  densify_grad_t_threshold: 0.0002 / 40
   densify_until_num_points: -1
   final_prune_from_iter: -1
   sh_increase_interval: 1000
