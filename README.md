@@ -1,5 +1,5 @@
 # Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting
-### [Project page](https://fudan-zvg.github.io/4d-gaussian-splatting/) | [Paper](https://arxiv.org/abs/2310.10642)
+### [Project page](https://logosintelligencelab.github.io/4d-gaussian-splatting/) | [Paper](https://arxiv.org/abs/2310.10642)
 > [**Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting**](https://arxiv.org/abs/2310.10642),  
 > Zeyu Yang, Hongye Yang, Zijie Pan, [Li Zhang](https://lzrobots.github.io)  
 > **Fudan University**  
@@ -27,7 +27,7 @@
 The hardware and software requirements are the same as those of the [3D Gaussian Splatting](https://github.com/graphdeco-inria/gaussian-splatting), which this code is built upon. To setup the environment, please run the following command:
 
 ```shell
-git clone https://github.com/fudan-zvg/4d-gaussian-splatting
+git clone https://github.com/LogosIntelligenceLab/4d-gaussian-splatting
 cd 4d-gaussian-splatting
 conda env create --file environment.yml
 conda activate 4dgs
@@ -64,19 +64,19 @@ python train.py --config $config_path
 
 ### 🎞️ Dynamic novel view synthesis
 
-https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/5e163b88-4f70-4157-b9f5-8431b13c26b7
+https://github.com/LogosIntelligenceLab/4d-gaussian-splatting/assets/45744267/5e163b88-4f70-4157-b9f5-8431b13c26b7
 
 ### 🎞️ Bullet time
 
-https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/ac5bc3b2-dd17-446d-9ee6-6efcc871eb84
+https://github.com/LogosIntelligenceLab/4d-gaussian-splatting/assets/45744267/ac5bc3b2-dd17-446d-9ee6-6efcc871eb84
 
 ### 🎞️ Free view synthesis from a teleporting camera
 
-https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/6bd0b57b-4857-4722-9851-61250a2521ab
+https://github.com/LogosIntelligenceLab/4d-gaussian-splatting/assets/45744267/6bd0b57b-4857-4722-9851-61250a2521ab
 
 ### 🎞️ Monocular dynamic scene reconstruction
 
-https://github.com/fudan-zvg/4d-gaussian-splatting/assets/45744267/2c79974c-1867-4ce6-848b-5d31679b6067
+https://github.com/LogosIntelligenceLab/4d-gaussian-splatting/assets/45744267/2c79974c-1867-4ce6-848b-5d31679b6067
 
 
 ## 📜 BibTex
