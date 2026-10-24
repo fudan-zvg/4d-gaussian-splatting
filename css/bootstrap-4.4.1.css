@@ -10245,3 +10245,8 @@
 /* Migration responsive bounds: keep long BibTeX inside its own scroll container. */
 .bibtexsection { max-width: 100%; overflow-x: auto; }
 body > .row { margin-left: 0; margin-right: 0; }
+
+/* Let comparison figures shrink to the screen instead of their source video width. */
+.b-row > figure { min-width: 0; max-width: 100%; flex: 1 1 0; }
+.b-row video, .b-row canvas { max-width: 100%; }
+.video-compare-container > video { position: absolute; width: 100%; height: 0; }
