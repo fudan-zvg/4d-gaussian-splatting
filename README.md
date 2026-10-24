@@ -38,7 +38,7 @@ Specify which attributes to compress using precision reduction.
 #### --vq_finetune_iters
 Number of steps for quantization-aware fine-tuning after compression.
 
-More fine-grained customization can be achieved by modifiying the function [here](scene/gaussian_model.py:L738). We provide a sample config file in `configs/dynerf/cut_roasted_beef_compact.yaml`, which can be directly use by: 
+More fine-grained customization can be achieved by modifiying the function [here](scene/gaussian_model.py#L738). We provide a sample config file in `configs/dynerf/cut_roasted_beef_compact.yaml`, which can be directly use by:
 ```shell
 python train.py --config configs/dynerf/cut_roasted_beef_compact.yaml
 ```
