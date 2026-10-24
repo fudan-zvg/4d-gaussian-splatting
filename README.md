@@ -18,8 +18,8 @@ We prepare one case under `./data/feeding_squirrel` for reference.
 The `input` folder contains single-view video frames (e.g., [Consistent4D dataset](https://github.com/yanqinJiang/Consistent4D)).
 
 The `multi_view` folder contains multi-view images at some key frames (e.g., 
-[Efficient4D](https://github.com/fudan-zvg/Efficient4D), 
-[Diffusion^2](https://github.com/fudan-zvg/diffusion-square),
+[Efficient4D](https://github.com/LogosIntelligenceLab/Efficient4D),
+[Diffusion^2](https://github.com/LogosIntelligenceLab/diffusion-square),
 [SV4D](https://github.com/Stability-AI/generative-models)).
 
 
