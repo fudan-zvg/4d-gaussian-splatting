@@ -10242,3 +10242,6 @@
     }
   }
   /*# sourceMappingURL=bootstrap.css.map */
+/* Migration responsive bounds: keep long BibTeX inside its own scroll container. */
+.bibtexsection { max-width: 100%; overflow-x: auto; }
+body > .row { margin-left: 0; margin-right: 0; }
