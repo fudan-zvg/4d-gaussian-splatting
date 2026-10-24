@@ -25,7 +25,7 @@
             }
         }
     </script>
-    <script src="./js/video_comparison.js"></script>
+    <script src="./js/video_comparison.js?v=20261024"></script>
 </head>
 
 <body>
@@ -285,7 +285,7 @@
                                                                 overflow: 
                                                                 hidden !important;">
                         <video class="video" id="mesh1" loop autoplay muted src="./static/videos/concat_with_depth_horizontal.mp4"
-                          onplay="resizeAndPlay(this)"></video>
+                          onloadeddata="resizeAndPlay(this)" onplay="resizeAndPlay(this)"></video>
                         <canvas class="videoMerge" height="0" id="mesh1Merge" style="position: relative;
                                                                                         top: 0;
                                                                                         left: 0;
